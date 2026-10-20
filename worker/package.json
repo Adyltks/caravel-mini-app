@@ -1,0 +1,19 @@
+{
+  "name": "caravel-worker",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:local": "wrangler d1 execute aduka --local --file=schema.sql",
+    "db:remote": "wrangler d1 execute aduka --remote --file=schema.sql",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "grammy": "^1.46.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.2"
+  },
+  "private": true,
+  "type": "module"
+}

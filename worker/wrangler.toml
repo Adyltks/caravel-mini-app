@@ -1,0 +1,30 @@
+name = "caravel-mini-app"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Мини апп (папка webapp) раздаётся этим же воркером: один адрес и для сайта, и для API.
+[assets]
+directory = "../webapp"
+binding = "ASSETS"
+
+# База D1. Создать: npx wrangler d1 create aduka  и вставить сюда database_id из вывода.
+[[d1_databases]]
+binding = "DB"
+database_name = "aduka"
+database_id = "PASTE_DATABASE_ID_HERE"
+
+[vars]
+# Куда присылать заявки: chat id менеджера или группы (узнать: /id боту)
+ADMIN_CHAT_ID = ""
+# Кто видит админ-панель: Telegram ID через запятую
+ADMIN_IDS = "42"
+# Google Таблица (необязательно): ID из ссылки и email сервисного аккаунта
+GOOGLE_SHEET_ID = ""
+GOOGLE_SHEET_TAB = "Заявки"
+GOOGLE_CLIENT_EMAIL = ""
+
+# Секреты задаются командой npx wrangler secret put <ИМЯ>:
+#   BOT_TOKEN          токен бота из @BotFather
+#   WEBHOOK_SECRET     любая случайная строка, защищает вебхук и /setup
+#   GOOGLE_PRIVATE_KEY private_key из JSON сервисного аккаунта (необязательно)
