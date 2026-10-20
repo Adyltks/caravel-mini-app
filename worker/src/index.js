@@ -78,6 +78,16 @@ async function handleOrder(env, db, data, user, ctx) {
 
 export default {
   async fetch(request, env, ctx) {
+    try {
+      return await handle(request, env, ctx);
+    } catch (e) {
+      console.error(e);
+      return new Response("Ошибка: " + e.message, { status: 500, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    }
+  },
+};
+
+async function handle(request, env, ctx) {
     const url = new URL(request.url);
     const db = makeDb(env.DB);
     const origin = url.origin;
@@ -88,11 +98,17 @@ export default {
     }
     // Одноразовая настройка: регистрирует вебхук и кнопку меню у бота
     if (url.pathname === "/setup" && url.searchParams.get("key") === env.WEBHOOK_SECRET && env.WEBHOOK_SECRET) {
-      const bot = new Bot(env.BOT_TOKEN);
-      await bot.api.setWebhook(`${origin}/webhook/${env.WEBHOOK_SECRET}`, { drop_pending_updates: true });
-      await bot.api.setChatMenuButton({ menu_button: { type: "web_app", text: "Каталог", web_app: { url: origin + "/" } } });
-      await bot.api.setMyCommands([{ command: "start", description: "Открыть каталог услуг" }, { command: "id", description: "Узнать ID чата" }]);
-      return new Response("Вебхук и кнопка меню настроены. Напишите боту /start.");
+      try {
+        if (!env.BOT_TOKEN) throw new Error("Не задан секрет BOT_TOKEN");
+        const bot = new Bot(env.BOT_TOKEN);
+        const me = await bot.api.getMe();
+        await bot.api.setWebhook(`${origin}/webhook/${env.WEBHOOK_SECRET}`, { drop_pending_updates: true });
+        await bot.api.setChatMenuButton({ menu_button: { type: "web_app", text: "Каталог", web_app: { url: origin + "/" } } });
+        await bot.api.setMyCommands([{ command: "start", description: "Открыть каталог услуг" }, { command: "id", description: "Узнать ID чата" }]);
+        return new Response(`Вебхук и кнопка меню настроены для бота @${me.username}. Напишите боту /start.`, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+      } catch (e) {
+        return new Response("Ошибка настройки: " + (e.description || e.message), { status: 500, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+      }
     }
 
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
@@ -120,5 +136,4 @@ export default {
     } catch (e) {
       return json({ ok: false, error: e.message }, 400);
     }
-  },
-};
+  }
