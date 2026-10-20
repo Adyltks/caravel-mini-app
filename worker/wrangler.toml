@@ -12,13 +12,13 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "aduka"
-database_id = "PASTE_DATABASE_ID_HERE"
+database_id = "cb07a1f6-664c-4e12-9920-a6c9c78c5c0e"
 
 [vars]
 # Куда присылать заявки: chat id менеджера или группы (узнать: /id боту)
 ADMIN_CHAT_ID = ""
 # Кто видит админ-панель: Telegram ID через запятую
-ADMIN_IDS = "42"
+ADMIN_IDS = ""
 # Google Таблица (необязательно): ID из ссылки и email сервисного аккаунта
 GOOGLE_SHEET_ID = ""
 GOOGLE_SHEET_TAB = "Заявки"
