@@ -1,4 +1,4 @@
-/* Caravel Mini App: каталог услуг и пакетов, карточка, заявка-квиз, админ-панель. */
+/* Caravel Mini App в стиле «Дордой»: прилавок услуг, пакеты-торг, карточка на весах, заявка-объявление, админ-панель. */
 (function () {
   const tg = window.Telegram && window.Telegram.WebApp;
   const inTg = !!(tg && tg.initData); // открыто внутри Telegram, а не в обычном браузере
@@ -8,35 +8,39 @@
   const cart = new Set(JSON.parse(sessionStorage.getItem("cart") || "[]"));
   let C = { ...window.CARAVEL, services: window.CARAVEL.services.map((s) => ({ ...s, description: s.desc, kind: "service", category: s.category || "" })) };
   let view = { name: "catalog" };
-  let filter = "all";
+  let pickedPkg = null;
   let lastOrder = null;
   let isAdmin = false;
   let adminData = { services: [], orders: [] };
-  let quiz = { step: 0, niche: "", task: "", budget: "", name: "", phone: "" };
+  let quiz = { niche: "", task: "", name: "", phone: "", website: "" };
   const STATUS = { new: "Новая", in_progress: "В работе", done: "Выполнена", cancelled: "Отменена" };
   const ICONS = ["ai", "app", "landing", "ads", "bot", "catalog"];
   const CATEGORIES = { web: "Сайты и приложения", ads: "Реклама", ai: "Боты и AI" };
-  const NICHES = ["Стоматология", "Косметология", "Окна и двери", "Мебель", "Ремонт", "Другое"];
-  const BUDGETS = ["до 30 000", "30–60 000", "60–100 000", "100 000+"];
+  const NICHES = ["Стоматология", "Косметология", "Окна, двери", "Мебель", "Ремонт", "Другое"];
+  const TILT = ["-3deg", "2.5deg", "1.5deg", "-2deg", "2deg", "-1.5deg"];
 
   if (tg) {
     tg.ready();
     tg.expand();
-    tg.setHeaderColor("#0b0b0c");
-    tg.setBackgroundColor("#0b0b0c");
+    try { tg.setHeaderColor("#0f3b38"); tg.setBackgroundColor("#0f3b38"); tg.setBottomBarColor && tg.setBottomBarColor("#0f3b38"); } catch {}
     tg.BackButton.onClick(back);
     tg.MainButton.onClick(mainAction);
   }
 
   const initData = () => (tg ? tg.initData : "");
-  const money = (n) => Number(n || 0).toLocaleString("ru-RU") + " " + C.currency;
+  const num = (n) => Number(n || 0).toLocaleString("ru-RU");
+  const money = (n) => num(n) + " " + C.currency;
   const byId = (id) => C.services.find((s) => s.id === id) || adminData.services.find((s) => s.id === id);
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const icon = (name) => `<svg><use href="#i-${ICONS.includes(name) ? name : "catalog"}"/></svg>`;
-  const cover = (name) => `<svg class="mock" viewBox="0 0 160 100"><use href="#m-${ICONS.includes(name) ? name : "catalog"}"/></svg>`;
   const discount = () => Math.min(90, Math.max(0, parseInt(C.pilot_discount, 10) || 0));
   const pilot = (price) => Math.round((price * (100 - discount())) / 100 / 100) * 100;
+  const now = (s) => (discount() ? pilot(s.price) : s.price); // цена, которую видит клиент
   const selected = () => [...cart].map(byId).filter(Boolean);
+  const services = () => C.services.filter((s) => s.kind !== "package");
+  const packages = () => C.services.filter((s) => s.kind === "package");
+  const strike = `<svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><path d="M2 20 C 30 8, 60 22, 98 6"/></svg>`;
+  const unit = (term) => { const t = String(term || "").trim(); if (/^(в месяц|ежемесяч)/i.test(t)) return "в месяц"; return t.length <= 14 ? t : t.split(/[,(]/)[0].trim(); };
 
   async function post(path, body) {
     const r = await fetch(API + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, initData: initData() }) });
@@ -70,179 +74,161 @@
     saveCart();
     render();
   }
-  function go(name, arg) { view = { name, arg }; window.scrollTo(0, 0); render(); }
+  const history = [];
+  function go(name, arg, isBack) {
+    if (!isBack && view.name !== name) history.push(view);
+    view = { name, arg };
+    window.scrollTo(0, 0);
+    render();
+  }
   function back() {
-    if (view.name === "order" && quiz.step > 0) { quiz.step--; return render(); }
-    if (["adminEdit", "adminOrders", "adminSettings"].includes(view.name)) return go("admin");
-    go("catalog");
+    if (["adminEdit", "adminOrders", "adminSettings"].includes(view.name)) return go("admin", null, true);
+    if (view.name === "success") { history.length = 0; return go("catalog", null, true); }
+    const prev = history.pop();
+    go(prev && prev.name !== "success" ? prev.name : "catalog", prev && prev.arg, true);
   }
+  const topbar = (right) => `<div class="top"><button class="backbtn" data-back="1">← Назад</button><span>${esc(right || "")}</span></div>`;
 
-  /* ---------- шапка вложенных экранов ---------- */
-  const topbar = (title) => `<div class="topbar"><button class="backbtn" data-back="1" aria-label="Назад">←<span>Назад</span></button><div class="topbar-title">${esc(title || "")}</div></div>`;
-
-  /* ---------- клиентские экраны ---------- */
+  /* ---------- 1 · прилавок ---------- */
   function catalog() {
-    const all = C.services;
-    const packages = all.filter((s) => s.kind === "package");
-    const services = all.filter((s) => s.kind !== "package");
-    const cats = [...new Set(services.map((s) => s.category).filter(Boolean))];
-    const chip = (key, label) => `<button class="fchip ${filter === key ? "on" : ""}" data-filter="${key}">${esc(label)}</button>`;
-    const chips = `<div class="fchips">${chip("all", "Все услуги")}${packages.length ? chip("packages", "Пакеты") : ""}${cats.map((c) => chip(c, CATEGORIES[c] || c)).join("")}</div>`;
-
-    const card = (s, big) => `
-      <button class="svc fade-in" data-open="${s.id}">
-        <div class="cover c-${esc(s.icon)}">${s.badge ? `<span class="badge">${esc(s.badge)}</span>` : ""}${cover(s.icon)}</div>
-        <div class="body">
-          <div class="t">${esc(s.title)}</div>
-          ${big ? `<div class="d">${esc(s.short)}</div>` : ""}
-          <div class="row">
-            <div><div class="price">от ${money(s.price)}</div>${big ? `<div class="meta">${esc(s.term)}</div>` : ""}</div>
-            <span class="plus ${cart.has(s.id) ? "on" : ""}" data-add="${s.id}">${cart.has(s.id) ? "✓" : "+"}</span>
-          </div>
-        </div>
+    const list = services();
+    const sign = (s, i) => `
+      <button class="sign kraft torn ${s.featured ? "hot" : ""}" style="--r:${TILT[i % TILT.length]};--i:${i}" data-open="${esc(s.id)}">
+        ${cart.has(s.id) ? '<span class="in">в заявке</span>' : ""}
+        <small>${esc(s.title)}</small><b>${num(now(s))}</b><i>${esc(C.currency)} · ${esc(unit(s.term))}</i>
+        ${s.featured || s.badge ? `<em>${esc(s.badge ? s.badge.toLowerCase() : "ходовое")}</em>` : ""}
       </button>`;
-    const pkg = (p) => `
-      <div class="pkg fade-in ${p.featured ? "hot" : ""}">
-        ${p.badge ? `<span class="badge">${esc(p.badge)}</span>` : ""}
-        <div class="pkg-head"><div class="pkg-title serif">${esc(p.title)}</div><div class="pkg-price">от ${money(p.price)}<small>${esc(p.term)}</small></div></div>
-        <p class="sub">${esc(p.short)}</p>
-        ${(p.includes || []).map((x) => `<div class="li"><i>✓</i>${esc(x)}</div>`).join("")}
-        <div class="pkg-actions"><button class="btn o" data-open="${p.id}">Подробнее</button><button class="btn g" data-add="${p.id}">${cart.has(p.id) ? "В заявке ✓" : "Выбрать"}</button></div>
-      </div>`;
-
-    let body;
-    if (filter === "packages") body = packages.map(pkg).join("") || '<div class="empty">Пакеты пока не добавлены.</div>';
-    else {
-      const list = filter === "all" ? services : services.filter((s) => s.category === filter);
-      const featured = list.filter((s) => s.featured);
-      const rest = list.filter((s) => !s.featured);
-      body = featured.map((s) => card(s, true)).join("") + `<div class="grid">${rest.map((s) => card(s, false)).join("")}</div>`;
-      if (!list.length) body = '<div class="empty">В этой категории пока пусто.</div>';
-    }
     return `
-      <div class="brand serif"><span class="logo">${esc(C.brand[0] || "C")}</span>${esc(C.brand)}</div>
-      <div class="eyebrow">${filter === "packages" ? "Готовые решения" : services.length + " услуг под ключ"}</div>
-      <h1 class="serif">${filter === "packages" ? "Пакеты <em>под задачу</em>" : "Digital-решения <em>для бизнеса</em>"}</h1>
-      <p class="sub">${filter === "packages" ? "Собрали самое нужное в три тарифа. Первому клиенту в нише скидка " + discount() + "%." : "Выберите услуги, узнайте детали и оставьте заявку в пару касаний."}</p>
-      ${chips}
-      ${body}`;
+      <div class="top"><b>${esc(C.brand)}</b><span>Бишкек</span></div>
+      <h1>Цены пишем<br><span class="hl">на картонке</span></h1>
+      <p class="lead">Реклама, страницы и боты для бизнеса. <b>Без «позвоните — узнаете».</b> Нажмите на ценник.</p>
+      <div class="stall">${list.map(sign).join("") || '<div class="empty">Скоро здесь появятся услуги.</div>'}</div>
+      ${C.guarantee ? `<div class="promise hand">Нет заявок за месяц — вернём оплату<svg viewBox="0 0 300 12" preserveAspectRatio="none"><path d="M2 8 C 60 2, 120 11, 180 5 S 270 3, 298 7"/></svg></div>` : ""}
+      <div class="bar ${inTg ? "tg-hidden" : ""}"><button class="btn" data-go="order">${cart.size ? "Оставить заявку · " + cart.size : "Посчитать для моего бизнеса"}</button></div>`;
   }
 
+  /* ---------- 2 · пакеты: торг ---------- */
+  function pkgs() {
+    const list = packages();
+    if (!pickedPkg || !list.find((p) => p.id === pickedPkg)) pickedPkg = (list.find((p) => p.featured) || list[0] || {}).id;
+    const d = discount();
+    const row = (p, i) => `
+      <button class="pk ${p.id === pickedPkg ? "on" : ""}" style="--r:${["-1deg", ".8deg", "-.6deg"][i % 3]};--i:${i}" data-pkg="${esc(p.id)}">
+        <h3>${esc(p.title)}</h3><p>${esc(p.short)}</p>
+        <div class="pr">${d ? `<span class="old">${num(p.price)}${strike}</span>` : ""}<span class="new">${num(now(p))}<small>${esc(unit(p.term))}</small></span></div>
+      </button>`;
+    const pick = byId(pickedPkg);
+    return `
+      <div class="top"><b>Пакеты</b><span>${list.length} на прилавке</span></div>
+      <div class="torg">Торгу&shy;емся<span>?</span></div>
+      ${d ? `<div class="hand">Уже уступили: первому в нише −${d}%.</div>` : ""}
+      ${list.map(row).join("") || '<div class="empty">Пакеты пока не добавлены.</div>'}
+      ${pick ? `<button class="linkbtn" data-open="${esc(pick.id)}">Что входит в «${esc(pick.title)}»</button>` : ""}
+      <p class="fine">Рекламный бюджет оплачивается отдельно, напрямую в Instagram. ${esc(C.guarantee || "")}</p>
+      ${pick ? `<div class="bar ${inTg ? "tg-hidden" : ""}"><button class="btn" data-order="${esc(pick.id)}">Беру «${esc(pick.title)}»</button></div>` : ""}`;
+  }
+
+  /* ---------- 3 · карточка на весах ---------- */
+  function scaleSvg(s) {
+    const items = (s.includes || []).slice(0, 4).map((x) => (x.length > 22 ? x.slice(0, 21) + "…" : x)).sort((a, b) => b.length - a.length);
+    const wts = items.map((t, i) => { const w = Math.min(156, t.length * 7.4 + 22); return `<rect x="${82 - w / 2}" y="${170 - i * 26}" width="${w}" height="24" rx="3"/><text x="82" y="${188 - i * 26}">${esc(t)}</text>`; }).join("");
+    const tag = num(now(s)); const tw = tag.length * 13 + 26;
+    return `<svg class="scale" viewBox="0 0 360 250" role="img" aria-label="Весы: что входит и цена">
+      <path class="st" d="M180 46 V 228 M140 232 H220" style="stroke-width:3"/>
+      <g class="beam"><path class="st" d="M82 46 H278" style="stroke-width:4"/><circle cx="180" cy="46" r="6" fill="var(--yel)"/></g>
+      <g class="pl"><path class="st" d="M82 46 L10 196 M82 46 L154 196"/><path d="M2 196 Q82 224 162 196 Z" fill="var(--paper)"/><g class="w">${wts}</g></g>
+      <g class="pr"><path class="st" d="M278 46 L228 196 M278 46 L328 196"/><path d="M220 196 Q278 222 336 196 Z" fill="var(--paper)"/>
+        <g transform="rotate(-4 278 170)"><rect class="tagr" x="${278 - tw / 2}" y="146" width="${tw}" height="50" rx="3"/><text class="tagt" x="278" y="181">${tag}</text></g></g>
+      <text class="ok" x="180" y="22">весит честно</text></svg>`;
+  }
   function detail(id) {
     const s = byId(id);
     if (!s) return catalog();
-    const inCart = cart.has(id);
     const d = discount();
+    const inCart = cart.has(id);
+    const isPkg = s.kind === "package";
+    const all = services();
+    const n = all.indexOf(s);
     return `
-      ${topbar(s.kind === "package" ? "Пакет" : "Услуга")}
-      <div class="hero c-${esc(s.icon)}">${s.badge ? `<span class="badge">${esc(s.badge)}</span>` : ""}${cover(s.icon)}</div>
-      <h2 class="serif">${esc(s.title)}</h2>
-      <div class="pricebox">
-        ${d ? `<div class="old">от ${money(s.price)}</div><div class="now">от ${money(pilot(s.price))}</div><span class="pilot">−${d}% первому клиенту</span>` : `<div class="now">от ${money(s.price)}</div>`}
-        ${s.term ? `<div class="meta" style="margin-top:4px">${esc(s.term)}</div>` : ""}
-      </div>
-      ${C.guarantee ? `<div class="guarantee"><span>🛡</span><span>${esc(C.guarantee)}</span></div>` : ""}
-      <p class="sub" style="margin-top:14px">${esc(s.description)}</p>
-      ${s.includes && s.includes.length ? `<div class="sec">Что входит</div>${s.includes.map((x) => `<div class="li"><i>✓</i>${esc(x)}</div>`).join("")}` : ""}
-      ${s.steps && s.steps.length ? `<div class="sec">Как работаем</div><div class="steps">${s.steps.map((x, i) => `<div class="st"><b class="serif">0${i + 1}</b>${esc(x)}</div>`).join("")}</div>` : ""}
-      <div class="bar ${inTg ? "tg-hidden" : ""}">
-        <button class="btn o" data-add="${s.id}">${inCart ? "В заявке ✓" : "В заявку +"}</button>
-        <button class="btn g" data-order="${s.id}">Оставить заявку</button>
-      </div>
-      ${inTg ? `<button class="linkbtn" data-add="${s.id}">${inCart ? "Убрать из заявки" : "Добавить в заявку и выбрать ещё"}</button>` : ""}`;
+      ${topbar(isPkg ? "пакет" : n >= 0 ? "ценник " + (n + 1) + " из " + all.length : "услуга")}
+      <h2>${esc(s.title)}</h2>
+      ${scaleSvg(s)}
+      <div class="svcp"><b>${money(now(s))}</b>${d ? `<s>${num(s.price)}</s><em>−${d}% первому в нише</em>` : ""}</div>
+      <div class="lead" style="margin:0">${esc(s.term || "")}</div>
+      ${C.guarantee ? `<div class="guar">${esc(C.guarantee)}</div>` : ""}
+      ${s.description ? `<p class="desc">${esc(s.description)}</p>` : ""}
+      ${s.includes && s.includes.length ? `<div class="sec">Что лежит на весах</div><ul class="inc">${s.includes.map((x, i) => `<li style="--i:${i}"><span>${i + 1}</span>${esc(x)}</li>`).join("")}</ul>` : ""}
+      ${s.steps && s.steps.length ? `<div class="sec">Как работаем</div><div class="path">${s.steps.map(esc).join(" · ")}</div>` : ""}
+      <button class="linkbtn" data-add="${esc(s.id)}">${inCart ? "Убрать из заявки" : "Добавить в заявку и выбрать ещё"}</button>
+      <div class="bar ${inTg ? "tg-hidden" : ""}"><button class="btn" data-order="${esc(s.id)}">Беру · ${esc(s.title)}</button></div>`;
   }
 
-  /* ---------- заявка-квиз ---------- */
-  const STEPS = ["Ниша", "Задача", "Контакт"];
+  /* ---------- 4 · заявка-объявление ---------- */
   function order() {
     const items = selected();
-    if (!items.length) {
-      return `${topbar("Заявка")}
-        <h1 class="serif">Ваша <em>заявка</em></h1>
-        <div class="empty">Вы пока ничего не выбрали.<br>Добавьте услуги из каталога плюсом.</div>
-        <div class="bar ${inTg ? "tg-hidden" : ""}"><button class="btn g" data-go="catalog">К услугам</button></div>`;
-    }
     const u = (inTg && tg.initDataUnsafe && tg.initDataUnsafe.user) || null;
     if (!quiz.name && u) quiz.name = [u.first_name, u.last_name].filter(Boolean).join(" ");
-    const progress = `<div class="progress">${STEPS.map((t, i) => `<div class="pstep ${i < quiz.step ? "done" : ""} ${i === quiz.step ? "on" : ""}"><b>${i + 1}</b>${t}</div>`).join("")}</div>`;
-    const chosen = `<div class="chosen">${items.map((s) => `<span class="tag">${esc(s.title)}<button data-add="${s.id}" aria-label="Убрать">✕</button></span>`).join("")}</div>`;
-    const optionChips = (name, list, value, extra) => `<div class="ochips">${list.map((o) => `<button class="ochip ${value === o ? "on" : ""}" data-pick="${name}" data-value="${esc(o)}">${esc(o)}</button>`).join("")}${extra || ""}</div>`;
-    let body;
-    if (quiz.step === 0) {
-      body = `
-        <h1 class="serif">В какой вы <em>нише?</em></h1>
-        <p class="sub">Так мы сразу покажем похожие кейсы и посчитаем точнее.</p>
-        ${optionChips("niche", NICHES, NICHES.includes(quiz.niche) ? quiz.niche : (quiz.niche ? "Другое" : ""))}
-        ${quiz.niche && !NICHES.slice(0, -1).includes(quiz.niche) ? `<div class="field"><div class="inp"><input id="nicheInput" placeholder="Напишите, чем занимаетесь" value="${esc(quiz.niche === "Другое" ? "" : quiz.niche)}"></div></div>` : ""}`;
-    } else if (quiz.step === 1) {
-      body = `
-        <h1 class="serif">Какая <em>задача?</em></h1>
-        <p class="sub">Пара слов о том, что хотите получить. Бюджет поможет предложить подходящий вариант.</p>
-        <div class="field"><div class="inp"><textarea id="taskInput" placeholder="Например: нужны заявки на имплантацию, сейчас только сарафан">${esc(quiz.task)}</textarea></div></div>
-        <div class="field"><label>Бюджет, ${esc(C.currency)} в месяц</label>${optionChips("budget", BUDGETS, quiz.budget)}</div>`;
-    } else {
-      body = `
-        <h1 class="serif">Как с вами <em>связаться?</em></h1>
-        <p class="sub">${inTg ? "Менеджер напишет в Telegram или позвонит, как удобнее." : "Менеджер позвонит или напишет в WhatsApp или Telegram по этому номеру."}</p>
-        <div class="field"><label>Имя</label><div class="inp"><input id="nameInput" value="${esc(quiz.name)}" placeholder="Как к вам обращаться" autocomplete="name">${u ? '<span class="tgtag">из Telegram</span>' : ""}</div></div>
-        <div class="field"><label>Телефон</label>
-          ${inTg && tg.requestContact ? `<button type="button" class="sharebtn ${quiz.phone ? "done" : ""}" id="shareBtn">${quiz.phone ? "✓ " + esc(quiz.phone) : "Поделиться номером из Telegram"}</button><div class="or">или введите вручную</div>` : ""}
-          <input id="websiteInput" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
-          <div class="inp" id="phoneBox"><input id="phoneInput" type="tel" inputmode="tel" value="${esc(quiz.phone)}" placeholder="+996 500 000 000" autocomplete="tel"></div>
-        </div>
-        <div class="note"><span>🔒</span><span>${inTg ? "Заявка сразу придёт менеджеру в Telegram." : "Заявка сразу придёт менеджеру, ответим в течение 15 минут в рабочее время."}${u && u.username ? " Ваш @" + esc(u.username) + " подставим автоматически." : ""}</span></div>`;
-    }
-    const last = quiz.step === STEPS.length - 1;
-    return `${topbar("Заявка · шаг " + (quiz.step + 1) + " из " + STEPS.length)}
-      ${progress}
-      ${chosen}
-      ${body}
-      <div class="msg" id="formMsg"></div>
-      <div class="bar ${inTg ? "tg-hidden" : ""}"><button class="btn g" data-next="1" id="submitBtn">${last ? "Отправить заявку" : "Далее"}</button></div>`;
+    const other = quiz.niche && !NICHES.slice(0, -1).includes(quiz.niche);
+    return `
+      ${topbar("заявка")}
+      <div class="notice">
+        <div class="tape l"></div><div class="tape r"></div>
+        <h2>Нужны<br><span>клиенты?</span></h2>
+        <div class="chosen">${items.length ? "Вы берёте: " + items.map((s) => `<span class="tag">${esc(s.title)}<button data-add="${esc(s.id)}" aria-label="Убрать">✕</button></span>`).join("") : "Пока ничего не выбрано."} <button class="add" data-go="catalog">${items.length ? "добавить" : "к прилавку"}</button></div>
+        <div class="f" id="nameBox"><label for="nameInput">Имя</label><input id="nameInput" value="${esc(quiz.name)}" placeholder="Как к вам обращаться" autocomplete="name"></div>
+        <div class="f" id="phoneBox"><label for="phoneInput">Телефон</label><input id="phoneInput" type="tel" inputmode="tel" value="${esc(quiz.phone)}" placeholder="+996 ___ __ __ __" autocomplete="tel"></div>
+        ${inTg && tg.requestContact ? `<button type="button" class="tgl ${quiz.phone ? "done" : ""}" id="shareBtn">${quiz.phone ? "Номер взяли из Telegram" : "Взять номер из Telegram"}</button>` : ""}
+        <div class="f"><label for="taskInput">Задача</label><input id="taskInput" value="${esc(quiz.task)}" placeholder="по желанию"></div>
+        <input id="websiteInput" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+        ${other ? `<div class="f"><label for="nicheInput">Ниша</label><input id="nicheInput" value="${esc(quiz.niche === "Другое" ? "" : quiz.niche)}" placeholder="чем занимаетесь"></div>` : ""}
+        <div class="msg" id="formMsg"></div>
+        <div class="ask">Ваша ниша — оторвите листок:</div>
+        <div class="fringe">${NICHES.map((n, i) => `<button class="tab-off ${quiz.niche === n || (n === "Другое" && other) ? "on" : ""}" style="--tr:${i % 2 ? "-5deg" : "5deg"}" data-pick="niche" data-value="${esc(n)}"><span>${esc(n)}</span></button>`).join("")}</div>
+      </div>
+      <p class="priv">Имя и телефон видит только наш менеджер. Используем их, чтобы связаться по заявке, без рассылок.</p>
+      <div class="bar ${inTg ? "tg-hidden" : ""}"><button class="btn" data-next="1" id="submitBtn">Отправить заявку</button></div>`;
   }
-
   function readStep() {
     const g = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : null; };
     const n = g("nicheInput"); if (n !== null) quiz.niche = n || "Другое";
     const t = g("taskInput"); if (t !== null) quiz.task = t;
     const nm = g("nameInput"); if (nm !== null) quiz.name = nm;
-    const p = g("phoneInput"); if (p !== null && p) quiz.phone = p;
+    const p = g("phoneInput"); if (p !== null) quiz.phone = p;
     const w = g("websiteInput"); if (w !== null) quiz.website = w;
   }
   async function next() {
     readStep();
     const msg = document.getElementById("formMsg");
-    if (quiz.step === 0 && !quiz.niche) return (msg.textContent = "Выберите нишу, можно «Другое».");
-    if (quiz.step < STEPS.length - 1) { quiz.step++; window.scrollTo(0, 0); return render(); }
-    if (!inTg && !quiz.name) return (msg.textContent = "Укажите имя, чтобы менеджер знал, как к вам обращаться.");
-    if (!/^\+?[\d\s()-]{10,18}$/.test(quiz.phone)) {
-      document.getElementById("phoneBox").classList.add("err");
-      return (msg.textContent = "Укажите телефон, чтобы менеджер мог связаться.");
-    }
+    const bad = (box, text) => { const b = document.getElementById(box); if (b) b.classList.add("err"); msg.textContent = text; };
+    if (!cart.size) return (msg.textContent = "Выберите услугу или пакет на прилавке.");
+    if (!quiz.name) return bad("nameBox", "Напишите имя");
+    if (!/^\+?[\d\s()-]{9,18}$/.test(quiz.phone)) return bad("phoneBox", "Напишите телефон");
+    if (!quiz.niche) return (msg.textContent = "Оторвите листок с вашей нишей");
     await submit();
   }
   async function submit() {
-    const payload = { name: quiz.name, phone: quiz.phone, niche: quiz.niche, budget: quiz.budget, comment: quiz.task, website: quiz.website || "", services: [...cart] };
+    const payload = { name: quiz.name, phone: quiz.phone, niche: quiz.niche, budget: "", comment: quiz.task, website: quiz.website || "", services: [...cart] };
     setMain({ text: "Отправляем…", progress: true });
     const btn = document.getElementById("submitBtn"); if (btn) { btn.disabled = true; btn.textContent = "Отправляем…"; }
     try {
       let res;
       if (API) res = await post("/api/order", payload);
-      else if (inTg && tg.sendData) { tg.sendData(JSON.stringify({ ...payload, initData: initData() })); res = { id: "—" }; }
       else res = { id: "DEMO" };
-      lastOrder = { id: res.id, name: quiz.name || "—", phone: quiz.phone, services: selected().map((s) => s.title) };
+      lastOrder = { id: res.id, name: quiz.name, phone: quiz.phone, niche: quiz.niche, services: selected().map((s) => s.title) };
       cart.clear(); saveCart();
-      quiz = { step: 0, niche: "", task: "", budget: "", name: "", phone: "" };
+      quiz = { niche: "", task: "", name: "", phone: "", website: "" };
+      history.length = 0;
       tg && tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
       go("success");
     } catch (e) {
       const msg = document.getElementById("formMsg");
-      if (msg) msg.textContent = "Не удалось отправить: " + e.message + ". Попробуйте ещё раз или напишите менеджеру.";
+      if (msg) msg.textContent = "Не ушло: " + e.message + ". Попробуйте ещё раз или напишите нам.";
       if (btn) { btn.disabled = false; btn.textContent = "Отправить заявку"; }
       updateMain();
     }
   }
   function requestPhone() {
+    readStep();
     const done = (ok, resp) => {
       const c = resp && resp.responseUnsafe && resp.responseUnsafe.contact;
       if (ok && c && c.phone_number) { quiz.phone = (c.phone_number.startsWith("+") ? "" : "+") + c.phone_number; render(); }
@@ -250,32 +236,27 @@
     try { tg.requestContact(done); } catch (e) { console.warn(e); }
   }
 
+  /* ---------- 5 · табличка «Ушли звонить вам» ---------- */
   function success() {
-    const o = lastOrder;
+    const o = lastOrder || { id: "—", name: "", phone: "", niche: "", services: [] };
     return `
-      <div class="ok fade-in">
-        <div class="ring">${icon("check")}</div>
-        <div class="eyebrow" style="margin-top:28px">Заявка №${esc(o.id)}</div>
-        <h1 class="serif" style="font-size:32px">Заявка <em>отправлена</em></h1>
-        <p class="sub" style="max-width:290px">Менеджер свяжется с вами ${inTg ? "в Telegram" : "по телефону"} в течение 15 минут в рабочее время.</p>
-        <div class="ticket">
-          <div class="tr"><span>Услуги</span><div style="text-align:right">${o.services.map(esc).join(", ")}</div></div>
-          <div class="tr"><span>Имя</span>${esc(o.name)}</div>
-          <div class="tr"><span>Телефон</span>${esc(o.phone)}</div>
-          <div class="tr"><span>Статус</span><b>Новая</b></div>
-        </div>
-      </div>
-      <div class="bar col">
-        <button class="btn g" data-go="catalog" style="flex:0 0 52px">Вернуться к услугам</button>
-        <a class="btn o" href="${esc(C.manager)}" target="_blank" rel="noopener" style="flex:0 0 52px;padding:0">Написать менеджеру</a>
-      </div>`;
+      <div class="top"><b>${esc(C.brand)}</b><span>заявка № ${esc(o.id)}</span></div>
+      <div class="nail"><div class="board">
+        <svg viewBox="0 0 342 70" preserveAspectRatio="none" aria-hidden="true"><path d="M171 0 L70 70 M171 0 L272 70"/></svg>
+        <div class="plate kraft torn"><small>Перерыв 15 минут</small><b>Ушли<br><span>звонить вам</span></b><i>${inTg ? "напишем в Telegram или позвоним" : "сейчас вернёмся с ответом"}</i></div>
+      </div></div>
+      <div class="slip"><h4><span>Записали</span><span>№ ${esc(o.id)}</span></h4><p>${o.services.map(esc).join(", ")}${o.niche ? " · " + esc(o.niche) : ""}<br>${esc(o.name)} · ${esc(o.phone)}</p></div>
+      <p class="steps3"><b>Созвон 15 минут</b> в рабочее время, потом <b>бесплатный аудит</b> за 2 дня и <b>первые заявки</b> за 14 дней.</p>
+      <button class="linkbtn" data-go="catalog">Вернуться к прилавку</button>
+      <div class="bar"><a class="btn o" href="${esc(C.manager)}" target="_blank" rel="noopener">Написать нам сейчас</a></div>`;
   }
 
   /* ---------- админ-панель ---------- */
   function admin() {
     const list = adminData.services;
-    return `${topbar("Админ-панель")}
-      <h1 class="serif">Услуги <em>${list.length}</em></h1>
+    return `${topbar("админ")}
+      <h1>Прилавок <span class="hl">${list.length}</span></h1>
+      <p class="admin-note">В поле «Цена от» пишите обычную цену. Если в настройках стоит скидка первому клиенту, приложение само зачеркнёт эту цену и покажет цену со скидкой.</p>
       <div class="arow">
         <button class="abtn" data-go="adminOrders">Заявки</button>
         <button class="abtn" data-go="adminSettings">Настройки</button>
@@ -295,8 +276,8 @@
     const s = id === "new" ? { id: "", title: "", short: "", description: "", price: "", term: "", badge: "", icon: "catalog", featured: false, includes: [], steps: [], sort: 100, active: true, kind: "service", category: "" } : adminData.services.find((x) => x.id === id);
     if (!s) return admin();
     const f = (label, name, value, ph, type) => `<div class="field"><label>${label}</label><div class="inp">${type === "ta" ? `<textarea name="${name}" placeholder="${esc(ph || "")}">${esc(value)}</textarea>` : `<input name="${name}" placeholder="${esc(ph || "")}" value="${esc(value)}">`}</div></div>`;
-    return `${topbar(id === "new" ? "Новая услуга" : "Редактирование")}
-      <h2 class="serif">${esc(s.title || "Услуга")}</h2>
+    return `${topbar(id === "new" ? "новая услуга" : "редактирование")}
+      <h2>${esc(s.title || "Услуга")}</h2>
       <form id="serviceForm" novalidate>
         <input type="hidden" name="id" value="${esc(s.id)}">
         <div class="two">
@@ -321,14 +302,14 @@
 
   function adminOrders() {
     const list = adminData.orders;
-    return `${topbar("Админ-панель")}
-      <h1 class="serif">Заявки <em>${list.length}</em></h1>
+    return `${topbar("админ")}
+      <h1>Заявки <span class="hl">${list.length}</span></h1>
       <div class="msg" id="adminMsg"></div>
       ${list.length ? "" : '<div class="empty">Заявок пока нет.</div>'}
       ${list.map((o) => `
         <div class="ticket" style="margin-top:12px">
           <div class="tr"><span>№${esc(o.id)}</span><div>${new Date(o.created_at).toLocaleString("ru-RU")}</div></div>
-          <div class="tr"><span>Клиент</span><div style="text-align:right">${esc(o.name)} ${o.username ? esc(o.username) : ""}<br><a href="tel:${esc(o.phone)}" style="color:var(--gold)">${esc(o.phone)}</a></div></div>
+          <div class="tr"><span>Клиент</span><div style="text-align:right">${esc(o.name)} ${o.username ? esc(o.username) : ""}<br><a href="tel:${esc(o.phone)}" >${esc(o.phone)}</a></div></div>
           <div class="tr"><span>Услуги</span><div style="text-align:right">${(o.services || []).map(esc).join(", ")}</div></div>
           ${o.niche ? `<div class="tr"><span>Ниша</span><div>${esc(o.niche)}</div></div>` : ""}
           ${o.budget ? `<div class="tr"><span>Бюджет</span><div>${esc(o.budget)}</div></div>` : ""}
@@ -339,8 +320,8 @@
   }
 
   function adminSettings() {
-    return `${topbar("Админ-панель")}
-      <h1 class="serif">Настройки</h1>
+    return `${topbar("админ")}
+      <h1>Настройки</h1>
       <form id="settingsForm" novalidate>
         <div class="field"><label>Название бренда</label><div class="inp"><input name="brand" value="${esc(C.brand)}"></div></div>
         <div class="field"><label>Валюта</label><div class="inp"><input name="currency" value="${esc(C.currency)}" placeholder="сом"></div></div>
@@ -361,7 +342,7 @@
   }
   function showMsg(text, ok) {
     const el = document.getElementById("adminMsg") || document.getElementById("formMsg");
-    if (el) { el.textContent = text; el.style.color = ok ? "var(--gold)" : ""; }
+    if (el) { el.textContent = text; el.style.color = ok ? "var(--yel)" : ""; }
   }
   async function saveService(form) {
     const fd = new FormData(form);
@@ -382,44 +363,44 @@
   function setMain(p) {
     if (!inTg) return;
     if (!p) return tg.MainButton.hide();
-    tg.MainButton.setParams({ text: p.text, color: "#e2b956", text_color: "#111111", is_visible: true, is_active: !p.progress });
+    tg.MainButton.setParams({ text: p.text, color: "#ff6a2b", text_color: "#ffffff", is_visible: true, is_active: !p.progress });
     p.progress ? tg.MainButton.showProgress() : tg.MainButton.hideProgress();
   }
   function updateMain() {
     const n = cart.size;
-    const plural = n === 1 ? "услуга" : n < 5 ? "услуги" : "услуг";
-    if (view.name === "catalog") return setMain(n ? { text: `Оставить заявку · ${n} ${plural}` } : null);
-    if (view.name === "detail") return setMain({ text: cart.has(view.arg) ? `Оставить заявку · ${n} ${plural}` : "Оставить заявку" });
-    if (view.name === "order") return setMain(cart.size ? { text: quiz.step === STEPS.length - 1 ? "Отправить заявку" : "Далее" } : { text: "К услугам" });
-    if (view.name === "success") return setMain({ text: "Вернуться к услугам" });
+    if (view.name === "catalog") return setMain({ text: n ? "Оставить заявку · " + n : "Посчитать для моего бизнеса" });
+    if (view.name === "packages") { const p = byId(pickedPkg); return setMain(p ? { text: "Беру «" + p.title + "»" } : null); }
+    if (view.name === "detail") { const s = byId(view.arg); return setMain(s ? { text: "Беру · " + s.title } : null); }
+    if (view.name === "order") return setMain({ text: "Отправить заявку" });
+    if (view.name === "success") return setMain({ text: "Написать нам сейчас" });
     setMain(null);
   }
   function mainAction() {
-    if (view.name === "detail") { cart.add(view.arg); saveCart(); return go("order"); }
     if (view.name === "catalog") return go("order");
-    if (view.name === "order") return cart.size ? next() : go("catalog");
-    if (view.name === "success") return go("catalog");
+    if (view.name === "packages") { if (pickedPkg) { cart.add(pickedPkg); saveCart(); } return go("order"); }
+    if (view.name === "detail") { cart.add(view.arg); saveCart(); return go("order"); }
+    if (view.name === "order") return next();
+    if (view.name === "success") return tg.openTelegramLink && /^https:\/\/t\.me\//.test(C.manager) ? tg.openTelegramLink(C.manager) : tg.openLink(C.manager);
   }
 
   /* ---------- рендер ---------- */
-  const screens = { catalog, order, success, admin, adminOrders, adminSettings };
+  const screens = { catalog, packages: pkgs, order, success, admin, adminOrders, adminSettings };
   function render() {
     app.innerHTML = screens[view.name] ? screens[view.name]() : view.name === "adminEdit" ? adminEdit(view.arg) : detail(view.arg);
-    const nested = view.name !== "catalog";
-    document.body.classList.toggle("has-bar", nested && view.name !== "admin");
-    document.body.classList.toggle("nested", nested);
-    tabs.querySelectorAll(".tab").forEach((t) => t.classList.toggle("on", t.dataset.go === view.name));
+    const nested = !["catalog", "packages", "success"].includes(view.name);
+    document.body.classList.toggle("has-bar", !!app.querySelector(".bar:not(.tg-hidden)"));
+    tabs.querySelectorAll(".tab").forEach((t) => t.classList.toggle("on", t.dataset.go === view.name || (view.name === "detail" && t.dataset.go === "catalog") || (view.name === "success" && t.dataset.go === "order") || (view.name.startsWith("admin") && t.dataset.go === "admin")));
     if (tg) nested ? tg.BackButton.show() : tg.BackButton.hide();
     updateMain();
   }
 
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-add],[data-open],[data-go],[data-order],[data-edit],[data-del],[data-back],[data-filter],[data-pick],[data-next],#shareBtn");
+    const t = e.target.closest("[data-add],[data-open],[data-go],[data-order],[data-edit],[data-del],[data-back],[data-pkg],[data-pick],[data-next],#shareBtn");
     if (!t) return;
     if (t.dataset.add) { e.preventDefault(); e.stopPropagation(); return toggle(t.dataset.add); }
     if (t.dataset.back) return back();
-    if (t.dataset.filter) { filter = t.dataset.filter; return render(); }
-    if (t.dataset.pick) { readStep(); quiz[t.dataset.pick] = t.dataset.value; return render(); }
+    if (t.dataset.pkg) { pickedPkg = t.dataset.pkg; tg && tg.HapticFeedback && tg.HapticFeedback.selectionChanged(); app.querySelectorAll(".pk").forEach((x) => x.classList.toggle("on", x === t)); const b = app.querySelector(".bar .btn"); const p = byId(pickedPkg); if (b && p) { b.dataset.order = p.id; b.textContent = "Беру «" + p.title + "»"; } const l = app.querySelector(".linkbtn"); if (l && p) { l.dataset.open = p.id; l.textContent = "Что входит в «" + p.title + "»"; } return updateMain(); }
+    if (t.dataset.pick) { readStep(); quiz[t.dataset.pick] = t.dataset.value; tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred("medium"); return render(); }
     if (t.dataset.next) return next();
     if (t.id === "shareBtn") return requestPhone();
     if (t.dataset.open) return go("detail", t.dataset.open);
@@ -431,7 +412,7 @@
       return;
     }
     if (t.dataset.go) {
-      if (t.dataset.go === "order") quiz.step = 0;
+      if (view.name === "order") readStep();
       go(t.dataset.go);
       if (t.dataset.go === "admin") loadAdmin("services");
       if (t.dataset.go === "adminOrders") loadAdmin("orders");
@@ -453,7 +434,13 @@
     }
     if (e.target.name === "icon") document.querySelectorAll(".ico").forEach((l) => l.classList.toggle("on", l.querySelector("input").checked));
   });
+  document.addEventListener("input", (e) => { const f = e.target.closest(".f.err"); if (f) f.classList.remove("err"); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && view.name !== "catalog") back(); });
+
+  /* для скриншотов: ?screen=packages|detail:ads|order|success */
+  if (new URLSearchParams(location.search).has("still")) document.documentElement.classList.add("still");
+  const q = new URLSearchParams(location.search).get("screen");
+  if (q) { const [n, a] = q.split(":"); if (n === "success") lastOrder = { id: 1007, name: "Адука", phone: "+996 555 12 34 56", niche: "Стоматология", services: ["Поток клиентов"] }; if (n === "order") { cart.add("flow"); quiz.name = "Адука"; quiz.niche = "Стоматология"; } view = { name: n, arg: a }; }
 
   applySettings();
   saveCart();
