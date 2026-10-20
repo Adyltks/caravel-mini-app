@@ -61,10 +61,14 @@ async function handleOrder(env, db, data, user, ctx) {
     services: items.map((s) => s.title),
     total: items.reduce((a, s) => a + s.price, 0),
     comment: String(data.comment || "").trim().slice(0, 1000),
+    niche: String(data.niche || "").trim().slice(0, 100),
+    budget: String(data.budget || "").trim().slice(0, 50),
   });
   const text =
     `🆕 Заявка №${order.id}\n\n👤 ${order.name} ${order.username}\n📞 ${order.phone}\n\n` +
     `🧾 Услуги:\n${items.map((s) => `• ${s.title} — от ${money(s.price, st.currency)}`).join("\n")}\n💰 Итого от ${money(order.total, st.currency)}\n` +
+    (order.niche ? `🏷 Ниша: ${order.niche}\n` : "") +
+    (order.budget ? `💵 Бюджет: ${order.budget}\n` : "") +
     (order.comment ? `\n💬 ${order.comment}\n` : "") +
     `\nОтветьте на это сообщение, чтобы написать клиенту. tg_id:${order.tg_id}`;
   const bot = new Bot(env.BOT_TOKEN);

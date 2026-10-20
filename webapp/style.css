@@ -112,3 +112,61 @@ body.has-bar .tabs{display:none}
 .check{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:14px}
 .check input{width:18px;height:18px;accent-color:var(--gold)}
 select.status{background:var(--card2);color:var(--gold);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font:inherit;font-size:13px}
+/* v2: навигация, обложки, пакеты, квиз */
+.topbar{display:flex;align-items:center;gap:10px;margin:0 -16px 6px;padding:10px 12px;position:sticky;top:0;background:rgba(11,11,12,.92);backdrop-filter:blur(10px);z-index:6}
+.backbtn{display:flex;align-items:center;gap:6px;height:36px;padding:0 12px 0 10px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-weight:600;font-size:14px}
+.topbar-title{color:var(--muted);font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.tg-hidden{display:none !important}
+.linkbtn{display:block;width:100%;text-align:center;color:var(--muted);font-size:14px;padding:14px 0 4px;text-decoration:underline;text-underline-offset:3px}
+/* обложки: нейтральные мокапы, золото только на акценте */
+.cover,.hero{color:#d9d6ce;background:#141417}
+.cover .mock{width:100%;height:100%;position:relative;z-index:1}
+.hero .mock{width:260px;height:160px;z-index:1}
+.cover:after,.hero:after{background:radial-gradient(circle at 50% 120%,rgba(226,185,86,.14),transparent 60%)}
+.c-ai{background:#15151a}.c-app{background:#131417}.c-landing{background:#151513}.c-ads{background:#17141a}.c-bot{background:#131716}.c-catalog{background:#171513}
+.mk-frame{fill:#1f1f24;stroke:#34343b;stroke-width:1.5}
+.mk-block{fill:#2a2a30}.mk-line{fill:#4a4a52}.mk-line-dark{fill:#6b5a2a}.mk-dot{fill:#3a3a42}
+.mk-accent{fill:var(--gold)}.mk-accent-f{fill:var(--gold)}
+.grid .cover{background:#141417}
+/* фильтры */
+.fchips{display:flex;gap:8px;overflow-x:auto;margin:14px -16px 4px;padding:0 16px 6px;scrollbar-width:none}
+.fchips::-webkit-scrollbar{display:none}
+.fchip{flex-shrink:0;height:36px;padding:0 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-weight:600;font-size:13px;color:var(--muted)}
+.fchip.on{background:var(--text);color:#111;border-color:var(--text)}
+/* пакеты */
+.pkg{position:relative;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-top:14px}
+.pkg.hot{border-color:var(--gold2);box-shadow:0 0 0 1px rgba(226,185,86,.25)}
+.pkg .badge{position:static;display:inline-block;margin-bottom:10px}
+.pkg-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.pkg-title{font-size:22px}
+.pkg-price{text-align:right;color:var(--gold);font-weight:700;font-size:16px;white-space:nowrap}
+.pkg-price small{display:block;color:var(--muted);font-weight:500;font-size:11px;white-space:normal;max-width:140px}
+.pkg .sub{margin:8px 0 4px}
+.pkg-actions{display:flex;gap:8px;margin-top:14px}
+.pkg-actions .btn{height:46px;font-size:14px}
+.pkg-actions .btn.o{flex:1}
+/* цена пилота и гарантия */
+.pricebox{margin-top:10px;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px}
+.pricebox .old{color:var(--muted);text-decoration:line-through;font-size:15px}
+.pricebox .now{color:var(--gold);font-weight:800;font-size:24px}
+.pricebox .meta{width:100%}
+.pilot{background:var(--gold-dim);border:1px solid var(--gold2);color:var(--gold);font-size:11px;font-weight:800;letter-spacing:.04em;padding:4px 9px;border-radius:8px}
+.guarantee{display:flex;gap:10px;margin-top:12px;background:#121412;border:1px solid #27352a;border-radius:14px;padding:12px;font-size:13px;color:#cfd6cf;line-height:1.4}
+/* квиз */
+.progress{display:flex;gap:6px;margin:4px 0 12px}
+.pstep{flex:1;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);padding:6px 8px;border-radius:10px;background:var(--card);border:1px solid var(--line)}
+.pstep b{width:18px;height:18px;border-radius:50%;background:var(--card2);display:grid;place-items:center;font-size:10px}
+.pstep.on{color:var(--text);border-color:var(--gold2)}.pstep.on b{background:var(--gold);color:#111}
+.pstep.done{color:var(--text)}.pstep.done b{background:#2e3a2e;color:#9fd39f}
+.chosen{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.tag{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:5px 6px 5px 10px;font-size:12px}
+.tag button{color:var(--muted);font-size:13px;padding:0 4px}
+.ochips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.ochip{height:40px;padding:0 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-weight:600;font-size:14px}
+.ochip.on{background:var(--gold-dim);border-color:var(--gold2);color:var(--gold)}
+.sharebtn{display:block;width:100%;height:50px;margin-top:6px;border-radius:14px;background:var(--card);border:1px solid var(--gold2);color:var(--gold);font-weight:700;font-size:14px}
+.sharebtn.done{border-color:#2e3a2e;color:#9fd39f}
+.or{text-align:center;color:var(--muted);font-size:12px;margin:8px 0 2px}
+.inp select{width:100%;height:50px;background:transparent;color:var(--text);border:0;outline:0;font:inherit}
+.inp select option{background:#1f1f23}
+body.has-bar .tabs{display:none}

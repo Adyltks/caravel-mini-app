@@ -23,6 +23,8 @@ export function normalize(s) {
     steps: list(s.steps, /[\n,]/),
     sort: parseInt(s.sort, 10) || 100,
     active: s.active === false || s.active === "false" ? 0 : 1,
+    kind: s.kind === "package" ? "package" : "service",
+    category: String(s.category || "").trim().toLowerCase().slice(0, 30),
   };
 }
 
@@ -37,26 +39,27 @@ export function makeDb(DB) {
       return Object.fromEntries(results.map((r) => [r.key, r.value]));
     },
     async saveSettings(patch) {
-      const rows = Object.entries(patch || {}).filter(([k]) => ["brand", "currency", "manager"].includes(k));
+      const rows = Object.entries(patch || {}).filter(([k]) => ["brand", "currency", "manager", "pilot_discount", "guarantee"].includes(k));
       if (rows.length) await DB.batch(rows.map(([k, v]) => DB.prepare("INSERT INTO aduka_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(k, String(v).trim())));
       return this.getSettings();
     },
     async saveService(input) {
       const s = normalize(input);
       if (!s.title) throw new Error("Укажите название услуги");
-      await DB.prepare(`INSERT INTO aduka_services (id, title, short, description, price, term, badge, icon, featured, includes, steps, sort, active, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      await DB.prepare(`INSERT INTO aduka_services (id, title, short, description, price, term, badge, icon, featured, includes, steps, sort, active, kind, category, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT(id) DO UPDATE SET title=excluded.title, short=excluded.short, description=excluded.description, price=excluded.price, term=excluded.term,
-          badge=excluded.badge, icon=excluded.icon, featured=excluded.featured, includes=excluded.includes, steps=excluded.steps, sort=excluded.sort, active=excluded.active, updated_at=excluded.updated_at`)
-        .bind(s.id, s.title, s.short, s.description, s.price, s.term, s.badge, s.icon, s.featured, JSON.stringify(s.includes), JSON.stringify(s.steps), s.sort, s.active).run();
+          badge=excluded.badge, icon=excluded.icon, featured=excluded.featured, includes=excluded.includes, steps=excluded.steps, sort=excluded.sort, active=excluded.active,
+          kind=excluded.kind, category=excluded.category, updated_at=excluded.updated_at`)
+        .bind(s.id, s.title, s.short, s.description, s.price, s.term, s.badge, s.icon, s.featured, JSON.stringify(s.includes), JSON.stringify(s.steps), s.sort, s.active, s.kind, s.category).run();
       return rowToService(await DB.prepare("SELECT * FROM aduka_services WHERE id = ?").bind(s.id).first());
     },
     async deleteService(id) {
       await DB.prepare("DELETE FROM aduka_services WHERE id = ?").bind(String(id)).run();
     },
     async createOrder(o) {
-      const r = await DB.prepare("INSERT INTO aduka_orders (name, phone, username, tg_id, services, total, comment) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *")
-        .bind(o.name, o.phone, o.username, o.tg_id, JSON.stringify(o.services), o.total, o.comment).first();
+      const r = await DB.prepare("INSERT INTO aduka_orders (name, phone, username, tg_id, services, total, comment, niche, budget) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *")
+        .bind(o.name, o.phone, o.username, o.tg_id, JSON.stringify(o.services), o.total, o.comment, o.niche || "", o.budget || "").first();
       return rowToOrder(r);
     },
     async listOrders(limit = 100) {
