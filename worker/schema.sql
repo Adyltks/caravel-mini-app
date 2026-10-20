@@ -46,7 +46,7 @@ INSERT OR IGNORE INTO sqlite_sequence (name, seq) VALUES ('aduka_orders', 1000);
 INSERT OR IGNORE INTO aduka_settings (key, value) VALUES
   ('brand', 'Caravel'),
   ('currency', 'сом'),
-  ('manager', 'https://t.me/caravel_manager'),
+  ('manager', 'https://t.me/adyltks'),
   ('pilot_discount', '50'),
   ('guarantee', 'Если за первый месяц не будет ни одной заявки, вернём оплату за нашу работу. Рекламный бюджет не возвращается.');
 
