@@ -39,7 +39,7 @@ const mem = {
 
 async function listServices(all = false) {
   if (!sb) return mem.services.filter((s) => all || s.active).sort((a, b) => a.sort - b.sort);
-  let q = sb.from("caravel_services").select("*").order("sort");
+  let q = sb.from("aduka_services").select("*").order("sort");
   if (!all) q = q.eq("active", true);
   const { data, error } = await q;
   if (error) throw error;
@@ -48,7 +48,7 @@ async function listServices(all = false) {
 
 async function getSettings() {
   if (!sb) return { ...mem.settings };
-  const { data, error } = await sb.from("caravel_settings").select("key,value");
+  const { data, error } = await sb.from("aduka_settings").select("key,value");
   if (error) throw error;
   return Object.fromEntries(data.map((r) => [r.key, r.value]));
 }
@@ -57,7 +57,7 @@ async function saveSettings(patch) {
   const allowed = ["brand", "currency", "manager"];
   const rows = Object.entries(patch).filter(([k]) => allowed.includes(k)).map(([key, value]) => ({ key, value: String(value).trim() }));
   if (!sb) { rows.forEach((r) => (mem.settings[r.key] = r.value)); return getSettings(); }
-  const { error } = await sb.from("caravel_settings").upsert(rows);
+  const { error } = await sb.from("aduka_settings").upsert(rows);
   if (error) throw error;
   return getSettings();
 }
@@ -71,27 +71,27 @@ async function saveService(input) {
     i >= 0 ? (mem.services[i] = s) : mem.services.push(s);
     return s;
   }
-  const { data, error } = await sb.from("caravel_services").upsert({ ...s, updated_at: new Date().toISOString() }).select().single();
+  const { data, error } = await sb.from("aduka_services").upsert({ ...s, updated_at: new Date().toISOString() }).select().single();
   if (error) throw error;
   return data;
 }
 
 async function deleteService(id) {
   if (!sb) { mem.services = mem.services.filter((s) => s.id !== id); return; }
-  const { error } = await sb.from("caravel_services").delete().eq("id", id);
+  const { error } = await sb.from("aduka_services").delete().eq("id", id);
   if (error) throw error;
 }
 
 async function createOrder(o) {
   if (!sb) { const row = { id: mem.nextId++, created_at: new Date().toISOString(), status: "new", ...o }; mem.orders.unshift(row); return row; }
-  const { data, error } = await sb.from("caravel_orders").insert(o).select().single();
+  const { data, error } = await sb.from("aduka_orders").insert(o).select().single();
   if (error) throw error;
   return data;
 }
 
 async function listOrders(limit = 100) {
   if (!sb) return mem.orders.slice(0, limit);
-  const { data, error } = await sb.from("caravel_orders").select("*").order("created_at", { ascending: false }).limit(limit);
+  const { data, error } = await sb.from("aduka_orders").select("*").order("created_at", { ascending: false }).limit(limit);
   if (error) throw error;
   return data;
 }
@@ -99,7 +99,7 @@ async function listOrders(limit = 100) {
 async function setOrderStatus(id, status) {
   if (!STATUSES.includes(status)) throw new Error("Неизвестный статус");
   if (!sb) { const o = mem.orders.find((x) => String(x.id) === String(id)); if (o) o.status = status; return o; }
-  const { data, error } = await sb.from("caravel_orders").update({ status }).eq("id", id).select().single();
+  const { data, error } = await sb.from("aduka_orders").update({ status }).eq("id", id).select().single();
   if (error) throw error;
   return data;
 }

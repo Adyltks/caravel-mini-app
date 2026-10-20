@@ -3,7 +3,7 @@ if (typeof window === "undefined") globalThis.window = {};
 window.CARAVEL = {
   brand: "Caravel",
   currency: "сом",
-  manager: "https://t.me/caravel_manager", // ссылка «Написать менеджеру»
+  manager: "https://t.me/aduka_manager", // ссылка «Написать менеджеру»
   services: [
     { id: "ai", title: "Адаптация AI под бизнес", short: "Внедрим нейросети в продажи, поддержку и контент. Обучим команду.",
       price: 50000, term: "2–4 недели", badge: "ХИТ", icon: "ai", featured: true,
