@@ -46,7 +46,21 @@ function makeBot(env, db, webappUrl) {
   return bot;
 }
 
+/* Заявки из браузера без Telegram: скрытое поле-ловушка для ботов и не больше 5 заявок в 10 минут с одного IP. */
+const webHits = new Map();
+function checkWebOrder(request, data) {
+  if (data.website) throw new Error("Заявка отклонена");
+  const ip = request.headers.get("CF-Connecting-IP") || "?";
+  const now = Date.now();
+  const hits = (webHits.get(ip) || []).filter((t) => now - t < 10 * 60 * 1000);
+  if (hits.length >= 5) throw new Error("Слишком много заявок, попробуйте позже");
+  hits.push(now);
+  webHits.set(ip, hits);
+  if (!String(data.name || "").trim()) throw new Error("Укажите имя");
+}
+
 async function handleOrder(env, db, data, user, ctx) {
+  user = user || {};
   const all = await db.listServices();
   const items = (data.services || []).map((id) => all.find((s) => s.id === id)).filter(Boolean);
   if (!items.length) throw new Error("Не выбраны услуги");
@@ -57,7 +71,7 @@ async function handleOrder(env, db, data, user, ctx) {
     name: String(data.name || "").trim().slice(0, 100) || [user.first_name, user.last_name].filter(Boolean).join(" ") || "—",
     phone,
     username: user.username ? "@" + user.username : "",
-    tg_id: user.id,
+    tg_id: user.id || null,
     services: items.map((s) => s.title),
     total: items.reduce((a, s) => a + s.price, 0),
     comment: String(data.comment || "").trim().slice(0, 1000),
@@ -70,7 +84,9 @@ async function handleOrder(env, db, data, user, ctx) {
     (order.niche ? `🏷 Ниша: ${order.niche}\n` : "") +
     (order.budget ? `💵 Бюджет: ${order.budget}\n` : "") +
     (order.comment ? `\n💬 ${order.comment}\n` : "") +
-    `\nОтветьте на это сообщение, чтобы написать клиенту. tg_id:${order.tg_id}`;
+    (order.tg_id
+      ? `\nОтветьте на это сообщение, чтобы написать клиенту. tg_id:${order.tg_id}`
+      : `\n🌐 Заявка с сайта (не из Telegram): свяжитесь с клиентом по телефону.`);
   const bot = new Bot(env.BOT_TOKEN);
   const notify = Promise.allSettled([
     env.ADMIN_CHAT_ID ? bot.api.sendMessage(env.ADMIN_CHAT_ID, text) : Promise.resolve(),
@@ -125,8 +141,12 @@ async function handle(request, env, ctx) {
       const user = await verifyInitData(data.initData, env.BOT_TOKEN);
       const path = url.pathname;
       if (path === "/api/me") return json({ ok: true, admin: isAdmin(env, user) });
+      // Заявка принимается и из Telegram, и по обычной ссылке в браузере
+      if (path === "/api/order") {
+        if (!user) checkWebOrder(request, data);
+        return json({ ok: true, id: (await handleOrder(env, db, data, user, ctx)).id });
+      }
       if (!user) throw new Error("Откройте приложение из Telegram");
-      if (path === "/api/order") return json({ ok: true, id: (await handleOrder(env, db, data, user, ctx)).id });
       if (!isAdmin(env, user)) throw new Error("Нет доступа");
       switch (path) {
         case "/api/admin/services": return json({ ok: true, services: await db.listServices(true) });

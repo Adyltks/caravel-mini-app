@@ -183,13 +183,14 @@
     } else {
       body = `
         <h1 class="serif">Как с вами <em>связаться?</em></h1>
-        <p class="sub">Менеджер напишет в Telegram или позвонит, как удобнее.</p>
+        <p class="sub">${inTg ? "Менеджер напишет в Telegram или позвонит, как удобнее." : "Менеджер позвонит или напишет в WhatsApp или Telegram по этому номеру."}</p>
         <div class="field"><label>Имя</label><div class="inp"><input id="nameInput" value="${esc(quiz.name)}" placeholder="Как к вам обращаться" autocomplete="name">${u ? '<span class="tgtag">из Telegram</span>' : ""}</div></div>
         <div class="field"><label>Телефон</label>
           ${inTg && tg.requestContact ? `<button type="button" class="sharebtn ${quiz.phone ? "done" : ""}" id="shareBtn">${quiz.phone ? "✓ " + esc(quiz.phone) : "Поделиться номером из Telegram"}</button><div class="or">или введите вручную</div>` : ""}
+          <input id="websiteInput" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
           <div class="inp" id="phoneBox"><input id="phoneInput" type="tel" inputmode="tel" value="${esc(quiz.phone)}" placeholder="+996 500 000 000" autocomplete="tel"></div>
         </div>
-        <div class="note"><span>🔒</span><span>Заявка сразу придёт менеджеру в Telegram.${u && u.username ? " Ваш @" + esc(u.username) + " подставим автоматически." : ""}</span></div>`;
+        <div class="note"><span>🔒</span><span>${inTg ? "Заявка сразу придёт менеджеру в Telegram." : "Заявка сразу придёт менеджеру, ответим в течение 15 минут в рабочее время."}${u && u.username ? " Ваш @" + esc(u.username) + " подставим автоматически." : ""}</span></div>`;
     }
     const last = quiz.step === STEPS.length - 1;
     return `${topbar("Заявка · шаг " + (quiz.step + 1) + " из " + STEPS.length)}
@@ -206,12 +207,14 @@
     const t = g("taskInput"); if (t !== null) quiz.task = t;
     const nm = g("nameInput"); if (nm !== null) quiz.name = nm;
     const p = g("phoneInput"); if (p !== null && p) quiz.phone = p;
+    const w = g("websiteInput"); if (w !== null) quiz.website = w;
   }
   async function next() {
     readStep();
     const msg = document.getElementById("formMsg");
     if (quiz.step === 0 && !quiz.niche) return (msg.textContent = "Выберите нишу, можно «Другое».");
     if (quiz.step < STEPS.length - 1) { quiz.step++; window.scrollTo(0, 0); return render(); }
+    if (!inTg && !quiz.name) return (msg.textContent = "Укажите имя, чтобы менеджер знал, как к вам обращаться.");
     if (!/^\+?[\d\s()-]{10,18}$/.test(quiz.phone)) {
       document.getElementById("phoneBox").classList.add("err");
       return (msg.textContent = "Укажите телефон, чтобы менеджер мог связаться.");
@@ -219,7 +222,7 @@
     await submit();
   }
   async function submit() {
-    const payload = { name: quiz.name, phone: quiz.phone, niche: quiz.niche, budget: quiz.budget, comment: quiz.task, services: [...cart] };
+    const payload = { name: quiz.name, phone: quiz.phone, niche: quiz.niche, budget: quiz.budget, comment: quiz.task, website: quiz.website || "", services: [...cart] };
     setMain({ text: "Отправляем…", progress: true });
     const btn = document.getElementById("submitBtn"); if (btn) { btn.disabled = true; btn.textContent = "Отправляем…"; }
     try {
@@ -254,7 +257,7 @@
         <div class="ring">${icon("check")}</div>
         <div class="eyebrow" style="margin-top:28px">Заявка №${esc(o.id)}</div>
         <h1 class="serif" style="font-size:32px">Заявка <em>отправлена</em></h1>
-        <p class="sub" style="max-width:290px">Менеджер свяжется с вами в Telegram в течение 15 минут в рабочее время.</p>
+        <p class="sub" style="max-width:290px">Менеджер свяжется с вами ${inTg ? "в Telegram" : "по телефону"} в течение 15 минут в рабочее время.</p>
         <div class="ticket">
           <div class="tr"><span>Услуги</span><div style="text-align:right">${o.services.map(esc).join(", ")}</div></div>
           <div class="tr"><span>Имя</span>${esc(o.name)}</div>
