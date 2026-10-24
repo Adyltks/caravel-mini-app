@@ -241,7 +241,8 @@ function tariffBefore(text, index) {
 export function checkPrices(tr, kb, opts = {}) {
   const out = [];
   const niche = opts.niche || opts.persona?.niche || null;
-  const premiumNiche = niche ? PREMIUM_NICHES.has(niche) : null;
+  // Если надбавки для стройки и ювелирки в базе нет (её убрали 2026-10-24), у всех ниш одни цены
+  const premiumNiche = !kb.premium ? false : niche ? PREMIUM_NICHES.has(niche) : null;
   for (const t of botTurns(tr)) {
     const text = t.text || "";
     for (const a of parseAmounts(text)) {

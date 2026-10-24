@@ -56,7 +56,9 @@ test("разбор сумм: телефоны и карты не считают�
 test("настоящий aduka.md разбирается (если файл рядом)", { skip: !safeFind() }, () => {
   const real = loadKnowledge();
   assert.equal(real.tiers.start.price, 15000);
-  assert.ok(real.premium && real.premium.pro.from);
+  assert.equal(real.tiers.magazin.price, 22000);
+  assert.equal(real.tiers.pro.price, 28000);
+  assert.equal(real.premium, null, "надбавку за стройку и ювелирку убрали");
   assert.ok(real.rulesText.length > 100);
 });
 function safeFind() {
