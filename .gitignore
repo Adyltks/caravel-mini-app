@@ -5,3 +5,4 @@ node_modules/
 
 # Результат проверки бота на реальном API
 worker/scripts/smoke-result.txt
+worker/scripts/simulate-result.txt
