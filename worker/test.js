@@ -1,7 +1,7 @@
 /* Проверки без сети: подпись initData и нормализация услуги. Запуск: npm test */
 import assert from "node:assert";
 import crypto from "node:crypto";
-import { verifyInitData } from "./src/index.js";
+import { verifyInitData } from "./src/telegram-auth.js";
 import { normalize } from "./src/db.js";
 
 const TOKEN = "111:test";

@@ -1,49 +1,113 @@
 /* Caravel на Cloudflare Workers: раздаёт мини апп, принимает вебхук Telegram-бота,
    отдаёт API каталога, заявок и админки. Данные в D1. */
+import { WorkerEntrypoint } from "cloudflare:workers";
 import { Bot, InlineKeyboard, Keyboard, webhookCallback } from "grammy";
 import { makeDb } from "./db.js";
 import { appendOrder } from "./sheets.js";
+import { verifyInitData } from "./telegram-auth.js";
+import { chatTurn, chatHistory, telegramSession, noteManagerReply, parseWebPayload } from "./bot/channels.js";
+import { createD1Store } from "./bot/store.js";
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8" } });
 const money = (n, cur) => Number(n).toLocaleString("ru-RU") + " " + cur;
 
-/** Проверка подписи initData из мини аппа. Возвращает пользователя или null. */
-export async function verifyInitData(initData, botToken) {
-  if (!initData || !botToken) return null;
-  const p = new URLSearchParams(initData);
-  const hash = p.get("hash");
-  p.delete("hash");
-  const check = [...p.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join("\n");
-  const enc = new TextEncoder();
-  const hmac = async (keyBytes, data) => crypto.subtle.sign("HMAC", await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]), enc.encode(data));
-  const secret = await hmac(enc.encode("WebAppData"), botToken);
-  const sig = [...new Uint8Array(await hmac(secret, check))].map((b) => b.toString(16).padStart(2, "0")).join("");
-  if (sig !== hash) return null;
-  try { return JSON.parse(p.get("user") || "null"); } catch { return null; }
-}
+export { verifyInitData };
 
 const isAdmin = (env, user) => !!user && String(env.ADMIN_IDS || "").split(",").map((s) => s.trim()).includes(String(user.id));
 
-function makeBot(env, db, webappUrl) {
+// Метка из ссылки t.me/AdukaMarketing_bot?start=salon_ad → ниша для приветствия и для бота
+const START_NICHES = ["cosmetics", "gifts", "salon", "clothing", "construction", "jewelry"];
+const START_GREETINGS = {
+  cosmetics: "Расскажите, что продаёте и как сейчас принимаете заказы: через директ или WhatsApp?",
+  gifts: "Расскажите, что продаёте: цветы, подарки? Как сейчас принимаете заказы?",
+  salon: "Расскажите, какие у вас услуги и как сейчас клиенты записываются?",
+};
+const TG_LIMIT = 4000; // Telegram режет сообщения длиннее 4096 знаков
+
+const groupSender = (env) => async (text) => {
+  if (!env.ADMIN_CHAT_ID) return;
+  await new Bot(env.BOT_TOKEN).api.sendMessage(env.ADMIN_CHAT_ID, text.slice(0, TG_LIMIT));
+};
+
+/** ИИ-ответ в личке бота. Работает в фоне (waitUntil), чтобы Telegram сразу получил 200. */
+async function answerInTelegram(env, db, bot, user, chatId, text) {
+  const store = createD1Store(env.DB);
+  const session = await telegramSession(store, user, "telegram");
+  await store.saveSession(session);
+  await bot.api.sendChatAction(chatId, "typing").catch(() => {});
+  const r = await chatTurn({ env, db, session, text, store, sendToGroup: groupSender(env) });
+  // muted: менеджер ведёт клиента сам, сообщение уже переслано в группу, бот в личке молчит
+  if (r.reply && !r.muted) await bot.api.sendMessage(chatId, r.reply.slice(0, TG_LIMIT), { link_preview_options: { is_disabled: true } }).catch((e) => console.error("Telegram:", e.message));
+}
+
+function makeBot(env, db, webappUrl, ctxWorker) {
   const bot = new Bot(env.BOT_TOKEN);
   bot.command("start", async (ctx) => {
     const st = await db.getSettings();
-    await ctx.reply(`Здравствуйте! Это ${st.brand}.\n\nОткройте каталог, выберите услуги и оставьте заявку. Менеджер ответит в этом чате.`, {
+    const tag = String(ctx.match || "").toLowerCase();
+    const niche = START_NICHES.find((n) => tag.startsWith(n)) || "";
+    if (niche && ctx.chat.type === "private") {
+      const store = createD1Store(env.DB);
+      const session = await telegramSession(store, ctx.from, "telegram");
+      session.context = { ...session.context, niche };
+      await store.saveSession(session);
+    }
+    const ask = START_GREETINGS[niche] || "Расскажите, чем занимается ваш бизнес, и я подскажу, что поможет получать больше заявок.";
+    await ctx.reply(`Здравствуйте! Это ${st.brand}. Я помощник и отвечаю в любое время.\n\n${ask}\n\nКаталог услуг и цены — кнопкой ниже.`, {
       reply_markup: new Keyboard().webApp("Открыть каталог услуг", webappUrl).resized(),
     });
   });
   bot.command("catalog", (ctx) => ctx.reply("Каталог услуг:", { reply_markup: new InlineKeyboard().webApp("Открыть", webappUrl) }));
   bot.command("id", (ctx) => ctx.reply(`ID этого чата: ${ctx.chat.id}\nВаш ID: ${ctx.from.id}`));
-  // Ответ менеджера клиенту: reply на заявку в админ-чате уходит клиенту
   bot.on("message:text", async (ctx) => {
-    if (String(ctx.chat.id) !== String(env.ADMIN_CHAT_ID)) return;
-    const r = ctx.message.reply_to_message;
-    const m = r && r.text && r.text.match(/tg_id:(\d+)/);
-    if (!m) return;
-    const st = await db.getSettings();
-    await bot.api.sendMessage(m[1], `Сообщение от менеджера ${st.brand}:\n\n${ctx.message.text}`).catch(() => {});
+    // Ответ менеджера клиенту: reply на заявку в админ-чате уходит клиенту, бот в этом чате замолкает
+    if (String(ctx.chat.id) === String(env.ADMIN_CHAT_ID)) {
+      const r = ctx.message.reply_to_message;
+      const m = r && r.text && r.text.match(/tg_id:(\d+)/);
+      if (!m) return;
+      const st = await db.getSettings();
+      await bot.api.sendMessage(m[1], `Сообщение от менеджера ${st.brand}:\n\n${ctx.message.text}`).catch(() => {});
+      await noteManagerReply(createD1Store(env.DB), m[1], ctx.message.text).catch((e) => console.error("note:", e.message));
+      return;
+    }
+    // Личка: отвечает ИИ (команды обработаны выше, в группах бот молчит)
+    if (ctx.chat.type !== "private" || ctx.message.text.startsWith("/")) return;
+    ctxWorker.waitUntil(answerInTelegram(env, db, bot, ctx.from, ctx.chat.id, ctx.message.text)
+      .catch((e) => console.error("answerInTelegram:", e.message)));
   });
   return bot;
+}
+
+/* Служебная связка для лендинга (service binding, entrypoint "ChatBridge"): снаружи не доступна.
+   Лендинг сам проверяет Origin и Turnstile и передаёт сюда только проверенные запросы. */
+const webHitsByIp = new Map();
+export class ChatBridge extends WorkerEntrypoint {
+  async chat(payload) {
+    const p = parseWebPayload(payload);
+    if (!p || !p.message) return { ok: false, error: "bad_request" };
+    const ip = String(payload.ip || "?");
+    const now = Date.now();
+    const hits = (webHitsByIp.get(ip) || []).filter((t) => now - t < 3600 * 1000);
+    if (hits.length >= 60) return { ok: false, error: "rate_limited", reply: "Слишком много сообщений. Попробуйте позже или оставьте номер WhatsApp." };
+    hits.push(now);
+    webHitsByIp.set(ip, hits);
+
+    const env = this.env;
+    const db = makeDb(env.DB);
+    const store = createD1Store(env.DB);
+    const session = (await store.getSession(p.id)) ?? store.newSession(p.id, { source: "web", context: p.context });
+    if (!session.verified && payload.verified !== true) return { ok: false, error: "captcha_required" };
+    if (payload.verified === true) session.verified = true;
+    if (p.context.lead_sent) session.context = { ...session.context, lead_sent: true };
+    await store.saveSession(session);
+    return chatTurn({ env, db, session, text: p.message, store, sendToGroup: groupSender(env) });
+  }
+
+  async history(payload) {
+    const p = parseWebPayload({ ...payload, message: "" });
+    if (!p) return { ok: false, error: "bad_request" };
+    return { ok: true, messages: await chatHistory(createD1Store(this.env.DB), p.id) };
+  }
 }
 
 /* Заявки из браузера без Telegram: скрытое поле-ловушка для ботов и не больше 5 заявок в 10 минут с одного IP. */
@@ -114,7 +178,7 @@ async function handle(request, env, ctx) {
 
     // Вебхук Telegram: адрес /webhook/<WEBHOOK_SECRET>
     if (request.method === "POST" && url.pathname === `/webhook/${env.WEBHOOK_SECRET}`) {
-      return webhookCallback(makeBot(env, db, origin + "/"), "cloudflare-mod")(request);
+      return webhookCallback(makeBot(env, db, origin + "/", ctx), "cloudflare-mod")(request);
     }
     // Одноразовая настройка: регистрирует вебхук и кнопку меню у бота
     if (url.pathname === "/setup" && url.searchParams.get("key") === env.WEBHOOK_SECRET && env.WEBHOOK_SECRET) {
@@ -141,6 +205,15 @@ async function handle(request, env, ctx) {
       const user = await verifyInitData(data.initData, env.BOT_TOKEN);
       const path = url.pathname;
       if (path === "/api/me") return json({ ok: true, admin: isAdmin(env, user) });
+      // Чат с ИИ в мини-аппе: только из Telegram (подпись initData), общая история с личкой бота
+      if (path === "/api/chat" || path === "/api/chat/history") {
+        if (!user) return json({ ok: false, error: "forbidden" }, 403);
+        const store = createD1Store(env.DB);
+        const session = await telegramSession(store, user, "miniapp");
+        await store.saveSession(session);
+        if (path === "/api/chat/history") return json({ ok: true, messages: await chatHistory(store, session.id) });
+        return json(await chatTurn({ env, db, session, text: String(data.message || ""), store, sendToGroup: groupSender(env) }));
+      }
       // Заявка принимается и из Telegram, и по обычной ссылке в браузере
       if (path === "/api/order") {
         if (!user) checkWebOrder(request, data);

@@ -6,9 +6,10 @@
     "deploy": "wrangler deploy",
     "db:local": "wrangler d1 execute aduka --local --file=schema.sql",
     "db:remote": "wrangler d1 execute aduka --remote --file=schema.sql",
-    "test": "node test.js"
+    "test": "node test.js && node --test test-bot.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.3.0",
     "grammy": "^1.46.0"
   },
   "devDependencies": {
