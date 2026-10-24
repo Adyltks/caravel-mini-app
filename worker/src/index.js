@@ -111,6 +111,36 @@ export class ChatBridge extends WorkerEntrypoint {
     if (!p) return { ok: false, error: "bad_request" };
     return { ok: true, messages: await chatHistory(createD1Store(this.env.DB), p.id) };
   }
+
+  /* Резервная копия заявки с формы лендинга: пишем в aduka_orders (видно в мини-аппе: Админ → Заявки).
+     Лендинг уже проверил Origin, Turnstile, согласие и номер; здесь — только длины и запись. */
+  async saveLead(lead) {
+    const s = (v, max) => String(v ?? "").replace(/[\u0000-\u001F\u007F]/g, " ").trim().slice(0, max);
+    const phone = s(lead?.phone, 20).replace(/\D/g, "");
+    if (!/^\d{11,12}$/.test(phone)) return { ok: false, error: "bad_request" };
+    const comment = [
+      lead.instagram && `Instagram: ${s(lead.instagram, 120)}`,
+      lead.products && `Позиций: ${s(lead.products, 40)}`,
+      lead.tariff && `Тариф: ${s(lead.tariff, 20)}`,
+      `Форма: ${s(lead.form, 10)}`,
+      (lead.utm_source || lead.utm_campaign || lead.utm_content) &&
+        `UTM: ${s(lead.utm_source, 100) || "-"} / ${s(lead.utm_campaign, 150) || "-"} / ${s(lead.utm_content, 150) || "-"}`,
+      lead.page && `Страница: ${s(lead.page, 300)}`,
+      lead.chat_session && `Чат на сайте: ${s(lead.chat_session, 36).slice(0, 8)}`,
+    ].filter(Boolean).join("\n");
+    const order = await makeDb(this.env.DB).createOrder({
+      name: "Заявка с сайта",
+      phone: `+${phone}`,
+      username: "",
+      tg_id: null,
+      services: ["Каталог (форма на сайте)"],
+      total: 0,
+      comment,
+      niche: s(lead.niche_name || lead.niche, 100),
+      budget: "",
+    });
+    return { ok: true, id: order.id };
+  }
 }
 
 /* Заявки из браузера без Telegram: скрытое поле-ловушка для ботов и не больше 5 заявок в 10 минут с одного IP. */
