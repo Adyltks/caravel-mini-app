@@ -57,7 +57,10 @@ export function turnNote(session, now, isFirst) {
     const c = session.context ?? {};
     if (c.niche) lines.push(`Ниша со страницы входа: ${c.niche}.`);
     if (c.quiz && Object.keys(c.quiz).length) lines.push(`Ответы посетителя в квизе на сайте: ${JSON.stringify(c.quiz)}.`);
-    if (c.username) lines.push(`Telegram посетителя: @${c.username} (это уже контакт для заявки).`);
+    if (session.tg_id) {
+      lines.push(`Посетитель пишет из Telegram${c.username ? ` (@${c.username})` : ""}: менеджер может ответить прямо в этот чат, `
+        + "так что контакт для заявки уже есть.");
+    }
   }
   if (session.lead_id) lines.push(`Заявка №${session.lead_id} уже создана.`);
   else if (session.context?.lead_sent) {
