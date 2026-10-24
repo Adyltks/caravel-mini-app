@@ -10,7 +10,7 @@ UPDATE aduka_services SET category = 'ads' WHERE id = 'ads' AND category = '';
 UPDATE aduka_services SET category = 'ai' WHERE id IN ('ai', 'bot') AND category = '';
 
 INSERT OR IGNORE INTO aduka_settings (key, value) VALUES
-  ('pilot_discount', '50'),
+  ('pilot_discount', '0'),
   ('guarantee', 'Если за первый месяц не будет ни одной заявки, вернём оплату за нашу работу. Рекламный бюджет не возвращается.');
 
 INSERT OR IGNORE INTO aduka_services (id, title, short, description, price, term, badge, icon, featured, includes, steps, sort, kind, category) VALUES

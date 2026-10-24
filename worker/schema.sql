@@ -44,10 +44,10 @@ CREATE TABLE IF NOT EXISTS aduka_settings (
 INSERT OR IGNORE INTO sqlite_sequence (name, seq) VALUES ('aduka_orders', 1000);
 
 INSERT OR IGNORE INTO aduka_settings (key, value) VALUES
-  ('brand', 'Caravel'),
+  ('brand', 'Aduka AI'),
   ('currency', 'сом'),
   ('manager', 'https://t.me/adyltks'),
-  ('pilot_discount', '50'),
+  ('pilot_discount', '0'),
   ('guarantee', 'Если за первый месяц не будет ни одной заявки, вернём оплату за нашу работу. Рекламный бюджет не возвращается.');
 
 INSERT OR IGNORE INTO aduka_services (id, title, short, description, price, term, badge, icon, featured, includes, steps, sort, category) VALUES

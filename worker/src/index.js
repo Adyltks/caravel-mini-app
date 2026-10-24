@@ -1,4 +1,4 @@
-/* Caravel на Cloudflare Workers: раздаёт мини апп, принимает вебхук Telegram-бота,
+/* Aduka AI на Cloudflare Workers: раздаёт мини-апп, принимает вебхук Telegram-бота,
    отдаёт API каталога, заявок и админки. Данные в D1. */
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { Bot, InlineKeyboard, Keyboard, webhookCallback } from "grammy";
