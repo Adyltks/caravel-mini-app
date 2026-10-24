@@ -47,8 +47,9 @@ export function buildSystem(services = [], settings = {}) {
   ].join("\n");
 }
 
-/** Служебная строка к каждой реплике: время по Бишкеку, рабочие ли часы, канал, контекст входа. */
-export function turnNote(session, now, isFirst) {
+/** Служебная строка к каждой реплике: время по Бишкеку, рабочие ли часы, канал, контекст входа.
+    Сюда попадает только то, что проверил сервер: ниша из списка, флаги, заметки менеджера. Текст посетителя — никогда. */
+export function turnNote(session, now, isFirst, note = "") {
   const local = new Date(now.getTime() + 6 * 3600 * 1000);
   const hh = local.getUTCHours();
   const time = `${String(hh).padStart(2, "0")}:${String(local.getUTCMinutes()).padStart(2, "0")}`;
@@ -60,7 +61,6 @@ export function turnNote(session, now, isFirst) {
     lines.push(`Канал: ${SOURCE_NAMES[session.source] ?? session.source}.`);
     const c = session.context ?? {};
     if (c.niche) lines.push(`Ниша со страницы входа: ${c.niche}.`);
-    if (c.quiz && Object.keys(c.quiz).length) lines.push(`Ответы посетителя в квизе на сайте: ${JSON.stringify(c.quiz)}.`);
     if (session.tg_id) {
       lines.push(`Посетитель пишет из Telegram${c.username ? ` (@${c.username})` : ""}: менеджер может ответить прямо в этот чат, `
         + "так что контакт для заявки уже есть.");
@@ -71,76 +71,107 @@ export function turnNote(session, now, isFirst) {
     lines.push("Посетитель уже отправил форму заявки на сайте с номером WhatsApp: номер не проси, выясняй задачу и боль. "
       + "Когда выяснишь, вызови create_lead с contact «номер из формы на сайте», чтобы менеджер получил подробности.");
   }
-  if (session.note) lines.push(session.note);
+  if (note) lines.push(note);
   return lines.join("\n");
 }
 
-const textOf = (content) => content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
+/** Ответы квиза — это слова посетителя: идут в его сообщение с пометкой, а не в служебное. */
+function quizBlock(session) {
+  const q = session.context?.quiz;
+  if (!q || !Object.keys(q).length) return null;
+  return { type: "text", text: `(Ответы в квизе на сайте: ${Object.entries(q).map(([k, v]) => `${k}: ${v}`).join("; ")})` };
+}
+
+const textOf = (content) => (content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
+const LEAD_DONE = "Спасибо! Заявка у менеджера, он свяжется с вами.";
 
 /**
  * Ответ бота на реплику посетителя.
+ * deadlineMs — общий срок на всю реплику (Telegram даёт фоновой работе около 30 секунд).
  * @returns {Promise<{reply: string, lead: boolean, model: string|null, costUsd: number, toolCalls: Array<{name, input}>}>}
  */
-export async function botReply({ client, env = {}, store, session, text, actions, now = new Date(), services = [], settings = {} }) {
+export async function botReply({ client, env = {}, store, session, text, actions, now = new Date(), services = [], settings = {}, deadlineMs = 22_000 }) {
+  const started = Date.now();
   const day = bishkekDay(now);
   const model = pickModel(await store.getSpend(day), env);
   if (!model) return { reply: TEXTS.overloaded, lead: false, model: null, costUsd: 0, toolCalls: [] };
 
   const history = await store.getMessages(session.id);
+  const isFirst = history.length === 0;
+  const note = await store.consumeNote(session.id); // заметка менеджера: забираем один раз
+  const userContent = [...(isFirst ? [quizBlock(session)].filter(Boolean) : []), { type: "text", text }];
   const turn = [
-    { role: "user", content: [{ type: "text", text }] },
-    { role: "system", content: turnNote(session, now, history.length === 0) },
+    { role: "user", content: userContent },
+    { role: "system", content: turnNote(session, now, isFirst, note) },
   ];
-  if (session.note) { session.note = ""; await store.saveSession(session); }
 
   const system = [{ type: "text", text: buildSystem(services, settings), cache_control: { type: "ephemeral" } }];
   let costUsd = 0;
   let cacheRead = 0; // для проверки, что кэш работает
   let lead = false;
   let reply = "";
+  let refused = false;
   const toolCalls = [];
+  const handoffsThisTurn = { n: 0 };
 
   for (let step = 0; step < MAX_STEPS; step++) {
-    const response = await client.beta.messages.create({
-      model,
-      max_tokens: 4096,
-      betas: BETAS,
-      fallbacks: "default",
-      system,
-      tools: TOOLS,
-      messages: [...history, ...turn],
-      cache_control: { type: "ephemeral" }, // кэш истории: следующая реплика читает её со скидкой
-      thinking: { type: "adaptive", block_binding: { prefix_mismatch_behavior: "drop_block" } },
-      output_config: { effort: env.BOT_EFFORT || "low" },
-    });
+    const left = deadlineMs - (Date.now() - started);
+    if (step > 0 && left < 4000) break; // не успеем ещё один запрос: отвечаем тем, что есть
+    let response;
+    try {
+      response = await client.beta.messages.create({
+        model,
+        max_tokens: 4096,
+        betas: BETAS,
+        fallbacks: "default",
+        system,
+        tools: TOOLS,
+        messages: [...history, ...turn],
+        cache_control: { type: "ephemeral" }, // кэш истории: следующая реплика читает её со скидкой
+        thinking: { type: "adaptive", block_binding: { prefix_mismatch_behavior: "drop_block" } },
+        output_config: { effort: env.BOT_EFFORT || "low" },
+      }, { signal: AbortSignal.timeout(Math.max(1000, left)) });
+    } catch (e) {
+      if (step === 0) throw e; // ничего не сделали — ошибка наверх, ход не сохраняется
+      console.error("Бот: шаг не успел или упал:", e?.message);
+      break; // инструменты уже отработали — сохраним ход с запасным текстом
+    }
     const cost = costOf(response, model);
     costUsd += cost;
     cacheRead += response.usage?.cache_read_input_tokens ?? 0;
     await store.addSpend(day, cost);
 
-    // Ответ сохраняем целиком (с блоками рассуждений), как вернул API: история только дописывается
-    turn.push({ role: "assistant", content: response.content });
+    if (response.stop_reason === "refusal") { refused = true; break; } // ответ отказа не сохраняем
     const said = textOf(response.content);
     if (said) reply = said;
-
-    if (response.stop_reason === "refusal") { reply = TEXTS.refused; break; }
+    // Ответ сохраняем целиком (с блоками рассуждений), как вернул API: история только дописывается
+    turn.push({ role: "assistant", content: response.content });
     if (response.stop_reason !== "tool_use") break;
 
     const results = [];
     for (const block of response.content.filter((b) => b.type === "tool_use")) {
       toolCalls.push({ name: block.name, input: block.input });
-      const r = await runTool(block, { session, actions, store });
+      const r = await runTool(block, { session, actions, store, handoffsThisTurn });
       if (r.lead) lead = true;
       results.push({ type: "tool_result", tool_use_id: block.id, content: r.content, ...(r.is_error ? { is_error: true } : {}) });
     }
     turn.push({ role: "user", content: results }); // все результаты одним сообщением
   }
 
-  // Если последним был вызов инструмента без текста (кончились шаги), история всё равно должна быть целой:
-  // незакрытый tool_use в конце сломает следующий запрос, поэтому такой хвост не сохраняем.
-  const last = turn[turn.length - 1];
-  const safeTurn = last.role === "assistant" && last.content.some((b) => b.type === "tool_use") ? turn.slice(0, -1) : turn;
-  await store.appendMessages(session.id, safeTurn);
+  if (refused) reply = TEXTS.refused;
+  else if (!reply) reply = lead ? LEAD_DONE : TEXTS.failed;
+  await store.appendMessages(session.id, closeTurn(turn, reply));
+  return { reply, lead, model, costUsd, toolCalls, cacheRead };
+}
 
-  return { reply: reply || TEXTS.failed, lead, model, costUsd, toolCalls, cacheRead };
+/** История должна заканчиваться текстом бота: иначе следующий запрос к API упадёт.
+    Хвост без текста (пустой ответ, обрыв посреди вызова инструмента) заменяем ответом, который увидел посетитель. */
+export function closeTurn(turn, reply) {
+  const out = [...turn];
+  const last = out[out.length - 1];
+  const lastIsText = last.role === "assistant" && textOf(last.content) && !last.content.some((b) => b.type === "tool_use");
+  if (lastIsText) return out;
+  if (last.role === "assistant") out.pop(); // без текста или с незакрытым tool_use
+  out.push({ role: "assistant", content: [{ type: "text", text: reply }] });
+  return out;
 }

@@ -52,12 +52,18 @@ export const TOOLS = [
   },
 ];
 
+// Защита группы менеджеров от спама: посетитель может уговаривать бота звать менеджера снова и снова
+export const LIMITS = { handoffsPerSession: 2, updatesPerSession: 3, handoffsPerTurn: 1 };
+
 /** Выполняет вызов инструмента. actions — побочные эффекты (запись заявки, сообщение в группу). */
-export async function runTool(block, { session, actions, store }) {
+export async function runTool(block, { session, actions, store, handoffsThisTurn = { n: 0 } }) {
   const input = block.input ?? {};
   try {
     if (block.name === "create_lead") {
       if (session.lead_id) {
+        if ((await store.bump(session.id, "updates")) > LIMITS.updatesPerSession) {
+          return { content: "Лимит дополнений исчерпан, больше не вызывай. Скажи, что менеджер всё уточнит при разговоре.", is_error: true };
+        }
         await actions.updateLead(input, session);
         return { content: `Дополнение к заявке №${session.lead_id} отправлено менеджеру.` };
       }
@@ -66,10 +72,14 @@ export async function runTool(block, { session, actions, store }) {
       }
       const { id } = await actions.createLead(input, session);
       session.lead_id = id;
-      await store.saveSession(session);
+      await store.setLeadId(session.id, id);
       return { content: `Заявка №${id} передана менеджеру.`, lead: true };
     }
     if (block.name === "handoff") {
+      if (++handoffsThisTurn.n > LIMITS.handoffsPerTurn
+        || (await store.bump(session.id, "handoffs")) > LIMITS.handoffsPerSession) {
+        return { content: "Менеджеру уже передано, больше не вызывай. Скажи, что менеджер ответит на всё сразу.", is_error: true };
+      }
       await actions.handoff(input, session);
       return { content: "Вопрос передан менеджеру." };
     }

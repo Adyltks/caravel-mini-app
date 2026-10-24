@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS bot_sessions (
   lead_id INTEGER,                        -- номер заявки в aduka_orders, если бот её создал
   muted_until TEXT,                       -- бот молчит до этого времени (менеджер ответил сам)
   note TEXT NOT NULL DEFAULT '',          -- заметка для бота к следующей реплике (например, что написал менеджер)
+  busy_until TEXT,                        -- замок: бот отвечает на реплику, вторая ждёт
+  handoffs INTEGER NOT NULL DEFAULT 0,    -- сколько раз бот звал менеджера (лимит от спама в группу)
+  updates INTEGER NOT NULL DEFAULT 0,     -- сколько дополнений к заявке отправил
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -20,9 +23,11 @@ CREATE TABLE IF NOT EXISTS bot_messages (
   session_id TEXT NOT NULL,
   role TEXT NOT NULL,
   content TEXT NOT NULL,                  -- сообщение целиком в формате Claude API (JSON)
+  is_text INTEGER NOT NULL DEFAULT 0,     -- 1 = реплика посетителя (для лимитов)
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS bot_messages_session ON bot_messages (session_id, id);
+CREATE INDEX IF NOT EXISTS bot_messages_created ON bot_messages (created_at);
 
 CREATE TABLE IF NOT EXISTS bot_spend (
   day TEXT PRIMARY KEY,                   -- дата по Бишкеку, ГГГГ-ММ-ДД

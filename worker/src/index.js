@@ -35,7 +35,8 @@ async function answerInTelegram(env, db, bot, user, chatId, text) {
   const session = await telegramSession(store, user, "telegram");
   await store.saveSession(session);
   await bot.api.sendChatAction(chatId, "typing").catch(() => {});
-  const r = await chatTurn({ env, db, session, text, store, sendToGroup: groupSender(env) });
+  // Фоновая работа после ответа Telegram живёт около 30 секунд: укладываемся в 25
+  const r = await chatTurn({ env, db, session, text, store, sendToGroup: groupSender(env), deadlineMs: 25_000 });
   // muted: менеджер ведёт клиента сам, сообщение уже переслано в группу, бот в личке молчит
   if (r.reply && !r.muted) await bot.api.sendMessage(chatId, r.reply.slice(0, TG_LIMIT), { link_preview_options: { is_disabled: true } }).catch((e) => console.error("Telegram:", e.message));
 }
@@ -63,7 +64,9 @@ function makeBot(env, db, webappUrl, ctxWorker) {
     // Ответ менеджера клиенту: reply на заявку в админ-чате уходит клиенту, бот в этом чате замолкает
     if (String(ctx.chat.id) === String(env.ADMIN_CHAT_ID)) {
       const r = ctx.message.reply_to_message;
-      const m = r && r.text && r.text.match(/tg_id:(\d+)/);
+      // Только ответ на сообщение самого бота, и только последняя метка: служебная строка всегда в конце,
+      // а выше могут быть слова клиента (метки в них бот обезвреживает, но берём последнюю на всякий случай)
+      const m = r?.from?.is_bot && r.text ? [...r.text.matchAll(/tg_id:(\d+)/g)].pop() : null;
       if (!m) return;
       const st = await db.getSettings();
       await bot.api.sendMessage(m[1], `Сообщение от менеджера ${st.brand}:\n\n${ctx.message.text}`).catch(() => {});

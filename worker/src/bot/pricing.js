@@ -4,22 +4,23 @@
 export const PRIMARY_MODEL = "claude-opus-5-5";
 export const BUDGET_MODEL = "claude-sonnet-5-5";
 
+// cacheRead — цена чтения из кэша (у Opus 5.5 и Sonnet 5.5 одинаковая, $0.20)
 const PRICES = {
-  "claude-opus-5-5": { input: 4, output: 20 },
-  "claude-sonnet-5-5": { input: 2, output: 10 },
-  "claude-haiku-5-5": { input: 0.1, output: 0.5 },
+  "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2 },
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.2 },
+  "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheRead: 0.01 },
 };
 // Неизвестную модель (например, запасную при отказе) считаем по самой дорогой цене: лучше переоценить расход
-const FALLBACK_PRICE = { input: 10, output: 50 };
+const FALLBACK_PRICE = { input: 10, output: 50, cacheRead: 1 };
 
 const priceOf = (model) => PRICES[model] ?? FALLBACK_PRICE;
 
-// Кэш: запись 1.25× цены ввода (5 минут), чтение 0.1×
+// Кэш: запись 1.25× цены ввода (5 минут), чтение — по cacheRead
 function costOfUsage(u, model) {
   const p = priceOf(model);
   const input = (u.input_tokens ?? 0) * p.input
     + (u.cache_creation_input_tokens ?? 0) * p.input * 1.25
-    + (u.cache_read_input_tokens ?? 0) * p.input * 0.1;
+    + (u.cache_read_input_tokens ?? 0) * p.cacheRead;
   return (input + (u.output_tokens ?? 0) * p.output) / 1e6;
 }
 
