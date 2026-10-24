@@ -28,7 +28,9 @@ export function buildSystem(services = [], settings = {}) {
   const packages = active.filter((s) => s.kind === "package").map(line).join("\n");
   const other = [
     single,
-    packages && `Пакеты агентства (это НЕ тарифы каталога: называй их «пакет …», например «пакет Старт»):\n${packages}`,
+    packages && `Пакеты агентства (это НЕ тарифы каталога: называй их «пакет …», например «пакет Начало»):\n${packages}`,
+    // Гарантия из админки относится к пакетам; у каталога своя гарантия срока (база знаний)
+    packages && settings.guarantee && `Гарантия на пакеты (не на каталог): ${String(settings.guarantee).trim()}`,
   ].filter(Boolean).join("\n\n");
   return [
     "Ты помощник-продавец агентства Aduka AI (бренд aduka.ai) в Бишкеке.",
