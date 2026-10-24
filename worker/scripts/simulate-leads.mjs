@@ -66,6 +66,7 @@ for (const p of PERSONAS) {
   const leads = [];
   const actions = {
     createLead: async (input, s) => { leads.push(leadCard(input, s, 9000 + leads.length)); return { id: 9000 + leads.length }; },
+    updateLead: async (input) => { say(`   [дополнение к заявке] ${input.meeting || input.summary}`); },
     handoff: async (input) => { say(`   [бот позвал менеджера] ${input.reason}: ${input.question}`); },
   };
   const customerMsgs = [{ role: "user", content: "[Ты открыл чат с ботом. Напиши первое сообщение.]" }];

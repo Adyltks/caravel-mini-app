@@ -16,6 +16,7 @@ const store = createMemoryStore();
 const session = store.newSession("web:smoke", { source: "web", context: { niche: "salon", page: "https://catalog-landing.adyltks.workers.dev/?niche=salon" } });
 const actions = {
   createLead: async (input) => { log.push(`  [create_lead] ${JSON.stringify(input)}`); return { id: 9001 }; },
+  updateLead: async (input) => { log.push(`  [update_lead] ${JSON.stringify(input)}`); },
   handoff: async (input) => { log.push(`  [handoff] ${JSON.stringify(input)}`); },
 };
 const services = [{ id: "bot", title: "Чат-боты в Telegram", price: 35000, term: "1–2 недели", short: "Отвечают клиентам 24/7", kind: "service" }];

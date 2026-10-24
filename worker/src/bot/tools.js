@@ -8,7 +8,8 @@ export const TOOLS = [
   {
     name: "create_lead",
     description: "Передать менеджеру заявку на созвон или встречу. Вызывай, когда посетитель дал имя и контакт и согласен, "
-      + "чтобы с ним связались. Один раз за разговор; если заявка уже есть, не вызывай повторно. "
+      + "чтобы с ним связались. Если заявка уже создана, а посетитель сообщил новое (время созвона, имя, другой контакт, важный вопрос), "
+      + "вызови снова: менеджеру уйдёт дополнение к заявке. Без вызова менеджер новые данные НЕ увидит. "
       + "Поля, которые не выяснил, оставь пустой строкой.",
     strict: true,
     input_schema: {
@@ -56,7 +57,10 @@ export async function runTool(block, { session, actions, store }) {
   const input = block.input ?? {};
   try {
     if (block.name === "create_lead") {
-      if (session.lead_id) return { content: `Заявка №${session.lead_id} уже создана, повторно не нужно.` };
+      if (session.lead_id) {
+        await actions.updateLead(input, session);
+        return { content: `Дополнение к заявке №${session.lead_id} отправлено менеджеру.` };
+      }
       if (!String(input.contact ?? "").trim() && !session.tg_id) {
         return { content: "Нет контакта: попроси номер WhatsApp или Telegram и вызови снова.", is_error: true };
       }

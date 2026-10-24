@@ -300,6 +300,9 @@ async function runPersona({ persona, args, kb, rubric, budget, client, botReply,
       executed.push({ name: "create_lead", input, turn: turns.length });
       return { id: `eval-lead-${persona.id}-${executed.length}` };
     },
+    async updateLead(input, s) {
+      executed.push({ name: "update_lead", input, turn: turns.length });
+    },
     async handoff(input, s) {
       executed.push({ name: "handoff", input, turn: turns.length });
     },

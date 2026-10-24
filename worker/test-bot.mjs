@@ -22,7 +22,7 @@ function fakeClient(responses) {
 }
 function fakeActions() {
   const log = [];
-  return { log, createLead: async (input) => { log.push(["lead", input]); return { id: 1001 }; }, handoff: async (input) => { log.push(["handoff", input]); } };
+  return { log, createLead: async (input) => { log.push(["lead", input]); return { id: 1001 }; }, updateLead: async (input) => { log.push(["update", input]); }, handoff: async (input) => { log.push(["handoff", input]); } };
 }
 const LEAD = { name: "Айгерим", contact: "+996555000001", contact_type: "whatsapp", niche: "салон", current_channel: "директ", pain: "не успевает отвечать",
   positions: "до 30", deadline: "", tariff: "start", objections: "", meeting: "созвон завтра в 11", temperature: "hot", summary: "Хочет прайс с записью" };
@@ -59,7 +59,7 @@ test("обычный ответ: Opus, запрос по правилам API, �
   assert.doesNotMatch(client2.calls[0].messages[4].content, /Канал:/, "контекст входа только в первой реплике");
 });
 
-test("заявка: create_lead → результат инструмента → текст; повторно не создаётся", async () => {
+test("заявка: create_lead → результат инструмента → текст; повторный вызов шлёт дополнение", async () => {
   const store = createMemoryStore();
   const session = store.newSession("tg:42", { source: "telegram", tg_id: 42 });
   const actions = fakeActions();
@@ -77,9 +77,9 @@ test("заявка: create_lead → результат инструмента �
 
   const client2 = fakeClient([toolResp("create_lead", LEAD, "tu_2"), textResp("Заявка уже у менеджера.")]);
   const r2 = await botReply({ client: client2, store, session, text: "ещё раз", actions, now: DAY_14 });
-  assert.equal(actions.log.length, 1, "вторая заявка не создаётся");
+  assert.deepEqual(actions.log.map((x) => x[0]), ["lead", "update"], "вторая заявка не создаётся, уходит дополнение");
   assert.equal(r2.lead, false);
-  assert.match(client2.calls[1].messages.at(-1).content[0].content, /уже создана/);
+  assert.match(client2.calls[1].messages.at(-1).content[0].content, /Дополнение к заявке №1001/);
 });
 
 test("дневной лимит: после $3 — Sonnet, после аварийного потолка — без запроса к API", async () => {

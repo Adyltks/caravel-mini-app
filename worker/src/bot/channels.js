@@ -78,6 +78,18 @@ export function makeActions(env, db, sendToGroup) {
       await sendToGroup(leadCard(input, session, order.id));
       return { id: order.id };
     },
+    async updateLead(input, session) {
+      const f = (label, v) => (String(v ?? "").trim() ? `${label}: ${clean(v, 400)}` : null);
+      await sendToGroup([
+        `📝 Дополнение к заявке №${session.lead_id}`,
+        "",
+        f("Имя", input.name),
+        f(`Контакт (${input.contact_type})`, input.contact),
+        f("Созвон/встреча", input.meeting),
+        f("Возражения", input.objections),
+        f("Итог", input.summary),
+      ].filter((x) => x !== null).join("\n") + replyHint(session));
+    },
     async handoff(input, session) {
       await sendToGroup([
         `🙋 Бот зовёт менеджера: ${HANDOFF_REASONS[input.reason] ?? input.reason}`,

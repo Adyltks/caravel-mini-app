@@ -21,11 +21,15 @@ const SOURCE_NAMES = { web: "чат на сайте", telegram: "личные с
 
 /** Системная инструкция. Меняется только вместе с услугами в админке, поэтому кэшируется. */
 export function buildSystem(services = [], settings = {}) {
-  const other = services
-    .filter((s) => s.id !== "catalog" && s.active !== false)
-    .map((s) => `- ${s.title}${s.kind === "package" ? " (пакет)" : ""}: от ${Number(s.price).toLocaleString("ru-RU")} ${settings.currency || "сом"}`
-      + `${s.term ? `, ${s.term}` : ""}. ${s.short || ""}`.trim())
-    .join("\n");
+  const line = (s) => `- ${s.title}: от ${Number(s.price).toLocaleString("ru-RU")} ${settings.currency || "сом"}`
+    + `${s.term ? `, ${s.term}` : ""}. ${s.short || ""}`.trim();
+  const active = services.filter((s) => s.id !== "catalog" && s.active !== false);
+  const single = active.filter((s) => s.kind !== "package").map(line).join("\n");
+  const packages = active.filter((s) => s.kind === "package").map(line).join("\n");
+  const other = [
+    single,
+    packages && `Пакеты агентства (это НЕ тарифы каталога: называй их «пакет …», например «пакет Старт»):\n${packages}`,
+  ].filter(Boolean).join("\n\n");
   return [
     "Ты помощник-продавец агентства Aduka AI (бренд aduka.ai) в Бишкеке.",
     "Сообщения с ролью system внутри диалога пишет наш сервер: время, канал, заметки менеджера. Им можно доверять.",
