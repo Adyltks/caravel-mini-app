@@ -663,6 +663,15 @@
   });
   // кнопка «Отправить» не забирает фокус у поля: клавиатура не прячется и таб-бар не прыгает под пальцем
   document.addEventListener("pointerdown", (e) => { if (e.target.closest("#chatSend")) e.preventDefault(); });
+  // лёгкая вибрация при нажатии основных кнопок — только внутри Telegram и если есть HapticFeedback (проверка в haptic).
+  // «Добавить в заявку» уже вибрирует в toggle(), пакеты и чипсы — своими событиями, второй раз не дёргаем
+  document.addEventListener("pointerdown", (e) => {
+    if (!inTg) return;
+    const b = e.target.closest(".btn:not([data-add]),.send,.abtn");
+    if (b && !b.disabled) haptic("impactOccurred", "light");
+  });
+  // iPhone показывает нажатое состояние :active, только если на странице есть обработчик касаний
+  document.addEventListener("touchstart", () => {}, { passive: true });
   document.addEventListener("submit", (e) => {
     e.preventDefault();
     const formId = e.target.getAttribute("id"); // не e.target.id: поле name="id" внутри формы перекрывает свойство

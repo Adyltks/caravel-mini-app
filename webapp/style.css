@@ -56,7 +56,8 @@ svg{width:22px;height:22px;flex:none}
 .brand img{display:block;height:28px;width:auto;flex:none}
 .nav{display:flex;align-items:center;justify-content:space-between;min-height:40px}
 .nav span{font-size:14px;color:var(--on-violet);padding-right:76px} /* правее — персиковый круг, текст на него не заходит */
-.backbtn{display:inline-flex;align-items:center;min-height:40px;padding:0 4px 0 0;font-weight:900;font-size:16px;color:#fff}
+.backbtn{display:inline-flex;align-items:center;min-height:44px;padding:0 10px 0 0;font-weight:900;font-size:16px;color:#fff;transition:opacity .12s}
+.backbtn:active{opacity:.7}
 h1{font-weight:900;font-size:30px;line-height:1.12;letter-spacing:-.015em;margin:14px 0 10px;text-wrap:balance}
 h2{font-weight:900;font-size:26px;line-height:1.15;letter-spacing:-.01em;margin:8px 0 6px;text-wrap:balance}
 h3{font-weight:900;font-size:18px;line-height:1.2}
@@ -77,15 +78,35 @@ h3{font-weight:900;font-size:18px;line-height:1.2}
 @keyframes up{from{opacity:0;transform:translateY(12px)}}
 .svc,.pk,.card{animation:up .4s ease-out both;animation-delay:calc(var(--i,0)*.05s)}
 
-/* ---------- кнопки ---------- */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:54px;padding:12px 24px;border:2px solid transparent;border-radius:999px;background:var(--violet);color:#fff;font-weight:900;font-size:17px;line-height:1.2;text-align:center;transition:transform .12s,opacity .2s}
-.btn:active{transform:scale(.97)}
-.btn:disabled{opacity:.6;cursor:progress}
-.btn.o{background:#fff;border-color:var(--violet);color:var(--violet)}
-.btn.peach{background:var(--peach);color:var(--ink)}
+/* ---------- кнопки ----------
+   «Осязаемые», как на лендинге: снизу твёрдая кромка темнее кнопки (--edge) + мягкая тень (--glow), сверху лёгкий блик.
+   Наведение мышью — чуть поднимается; нажатие — «вдавливается» на 3 px, кромка почти исчезает (низ кнопки на месте).
+   Двигаются только transform и box-shadow, 140 мс; при prefers-reduced-motion — без движения, только тень */
+.btn{
+  --edge:#3a22c4;--glow:rgba(58,34,196,.3);--hi:rgba(255,255,255,.22);--lift:4px;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:54px;padding:12px 24px;border:2px solid transparent;border-radius:999px;
+  background-color:var(--violet);background-image:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,0) 55%);color:#fff;
+  font-weight:900;font-size:17px;line-height:1.2;text-align:center;
+  box-shadow:inset 0 1px 0 var(--hi),0 var(--lift) 0 var(--edge),0 calc(var(--lift) + 6px) 18px -4px var(--glow);
+  transition:transform .14s ease-out,box-shadow .14s ease-out,background-color .14s,opacity .2s;touch-action:manipulation}
+@media (hover:hover){
+  .btn:hover:not(:disabled){transform:translateY(-1px);--lift:5px;background-color:var(--violet-deep)}
+  .btn.o:hover{background-color:var(--lilac)}
+  .btn.peach:hover{background-color:#fff}
+}
+.btn:active:not(:disabled){transform:translateY(3px);--lift:1px;--glow:rgba(58,34,196,.12);background-color:var(--violet-deep);transition-duration:.06s}
+.btn:disabled{opacity:.6;cursor:progress;transform:none;--lift:2px}
+.btn:focus-visible{outline-offset:3px}
+/* контурная: белая с фиолетовой кромкой, при нажатии — лавандовая */
+.btn.o{background-color:#fff;background-image:none;border-color:var(--violet);color:var(--violet);--edge:var(--violet);--glow:rgba(58,34,196,.16);--hi:transparent;--lift:3px}
+.btn.o:active{background-color:var(--lavender)}
+/* персиковая на фиолетовой шапке: кромка тёмно-персиковая, тень темнее фона */
+.btn.peach{background-color:var(--peach);color:var(--ink);--edge:#d98a74;--glow:rgba(20,10,90,.45);--hi:rgba(255,255,255,.6)}
+.btn.peach:active{background-color:#ffc4b2} /* тёмный текст на нём 11:1 */
 .btn.sm{min-height:46px;padding:10px 20px;font-size:16px}
 .btn.wide{display:flex;width:100%}
-.linkbtn{display:block;margin:16px auto 0;padding:8px;font-weight:900;font-size:15px;color:var(--violet);text-decoration:underline;text-underline-offset:3px;text-align:center}
+.linkbtn{display:block;min-height:44px;margin:16px auto 0;padding:10px 14px;border-radius:999px;font-weight:900;font-size:15px;color:var(--violet);text-decoration:underline;text-underline-offset:3px;text-align:center;transition:background-color .12s}
+.linkbtn:active{background:var(--lavender)}
 .row2{display:grid;grid-template-columns:1fr;gap:10px;margin-top:16px}
 
 /* нижняя кнопка (в браузере; в Telegram её заменяет родная MainButton) */
@@ -96,17 +117,31 @@ h3{font-weight:900;font-size:18px;line-height:1.2}
 /* ---------- таб-бар ---------- */
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;background:#fff;border-top:1px solid var(--line);padding-bottom:var(--safe-b)}
 .tabs-in{display:flex;max-width:520px;margin:0 auto;height:var(--tabs-h);padding:0 4px}
-.tab{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;color:var(--muted);white-space:nowrap}
-.tab svg{width:40px;height:28px;padding:3px 9px;border-radius:999px;transition:background-color .2s}
+.tab{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;color:var(--muted);white-space:nowrap;border-radius:var(--rs);touch-action:manipulation}
+.tab svg{width:40px;height:28px;padding:3px 9px;border-radius:999px;transition:background-color .14s,transform .14s ease-out}
 .tab.on{color:var(--violet);font-weight:900}
 .tab.on svg{background:var(--lavender)}
+/* нажатие вкладки: иконка вдавливается, пилюля под ней темнеет */
+@media (hover:hover){.tab:hover svg{background:var(--lilac)}.tab.on:hover svg{background:var(--lavender)}}
+.tab:active{color:var(--violet)}
+.tab:active svg{background:#d3c9ff;transform:translateY(2px) scale(.94);transition-duration:.06s}
+.tab:focus-visible{outline-offset:-3px}
 .tab .cnt{position:absolute;top:4px;left:calc(50% + 8px);min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--violet);color:#fff;font-weight:900;font-size:11px;line-height:20px;text-align:center}
 
 /* ---------- 1 · услуги ---------- */
 .list{display:grid;gap:12px}
-.svc{position:relative;display:grid;grid-template-columns:48px 1fr;gap:12px;width:100%;padding:16px;background:#fff;border-radius:var(--r);box-shadow:0 1px 0 var(--line),0 10px 30px rgba(91,63,245,.08);transition:transform .12s}
-.svc:active{transform:scale(.98)}
-.svc.hot{box-shadow:0 0 0 2px var(--violet),0 10px 30px rgba(91,63,245,.12)}
+/* карточка услуги — это кнопка: лавандовая кромка снизу, при наведении чуть поднимается, при нажатии вдавливается.
+   Сдвиг через translate, а не transform: transform занят анимацией появления */
+.svc{position:relative;display:grid;grid-template-columns:48px 1fr;gap:12px;width:100%;padding:16px;background:#fff;border-radius:var(--r);
+  box-shadow:0 3px 0 var(--line),0 10px 28px rgba(91,63,245,.1);transition:translate .14s ease-out,box-shadow .14s ease-out,background-color .14s;touch-action:manipulation}
+.svc.hot{box-shadow:0 0 0 2px var(--violet),0 4px 0 1px var(--violet),0 10px 28px rgba(91,63,245,.14)}
+@media (hover:hover){
+  .svc:hover{translate:0 -2px;box-shadow:0 5px 0 var(--line),0 16px 34px rgba(91,63,245,.14)}
+  .svc.hot:hover{box-shadow:0 0 0 2px var(--violet),0 6px 0 1px var(--violet),0 16px 34px rgba(91,63,245,.18)}
+}
+.svc:active{translate:0 3px;background:#fbfaff;box-shadow:0 0 0 var(--line),0 4px 10px rgba(91,63,245,.1);transition-duration:.06s}
+.svc.hot:active{box-shadow:0 0 0 2px var(--violet),0 1px 0 1px var(--violet),0 4px 10px rgba(91,63,245,.12)}
+.svc:focus-visible,.pk:focus-visible{outline-offset:3px}
 .ic{display:grid;place-items:center;width:48px;height:48px;border-radius:var(--rs);background:var(--lavender);color:var(--violet)}
 .ic svg{width:24px;height:24px}
 .t-peach{background:var(--peach)}.t-mint{background:var(--mint)}.t-lavender{background:var(--lavender)}.t-butter{background:var(--butter)}
@@ -122,8 +157,12 @@ h3{font-weight:900;font-size:18px;line-height:1.2}
 .guar{margin-top:18px;padding:14px 16px;border-radius:var(--rs);background:var(--mint);font-size:15px;line-height:1.45}
 
 /* ---------- 2 · пакеты ---------- */
-.pk{position:relative;display:grid;grid-template-columns:1fr auto;gap:4px 12px;width:100%;padding:16px;background:#fff;border:2px solid transparent;border-radius:var(--r);box-shadow:0 1px 0 var(--line),0 10px 30px rgba(91,63,245,.08);transition:border-color .2s}
-.pk.on{border-color:var(--violet)}
+.pk{position:relative;display:grid;grid-template-columns:1fr auto;gap:4px 12px;width:100%;padding:16px;background:#fff;border:2px solid transparent;border-radius:var(--r);
+  box-shadow:0 3px 0 var(--line),0 10px 28px rgba(91,63,245,.1);transition:border-color .14s,translate .14s ease-out,box-shadow .14s ease-out;touch-action:manipulation}
+.pk.on{border-color:var(--violet);box-shadow:0 4px 0 var(--violet),0 10px 28px rgba(91,63,245,.14)}
+@media (hover:hover){.pk:hover{translate:0 -2px;box-shadow:0 5px 0 var(--line),0 16px 34px rgba(91,63,245,.14)}.pk.on:hover{box-shadow:0 6px 0 var(--violet),0 16px 34px rgba(91,63,245,.18)}}
+.pk:active{translate:0 3px;box-shadow:0 0 0 var(--line),0 4px 10px rgba(91,63,245,.1);transition-duration:.06s}
+.pk.on:active{box-shadow:0 1px 0 var(--violet),0 4px 10px rgba(91,63,245,.12)}
 .pk h3{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
 .pk p{grid-column:1/-1;font-size:14px;line-height:1.35;color:var(--muted)}
 .pk .pr{text-align:right;white-space:nowrap}
@@ -153,19 +192,27 @@ h3{font-weight:900;font-size:18px;line-height:1.2}
 .chosen{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .chosen .lbl{width:100%;font-weight:900;font-size:15px}
 .tag{display:inline-flex;align-items:center;gap:2px;padding:4px 4px 4px 12px;border-radius:999px;background:var(--lavender);color:var(--violet);font-weight:900;font-size:14px}
-.tag button{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;font-size:14px}
-.chosen .add{font-weight:900;font-size:14px;color:var(--violet);text-decoration:underline;text-underline-offset:3px;padding:6px 4px}
+.tag button{position:relative;display:grid;place-items:center;width:28px;height:28px;border-radius:50%;font-size:14px;transition:background-color .12s}
+.tag button::after{content:"";position:absolute;inset:-8px} /* зона касания 44×44 при значке 28 px */
+.tag button:active{background:rgba(91,63,245,.18)}
+.chosen .add{display:inline-flex;align-items:center;min-height:44px;font-weight:900;font-size:14px;color:var(--violet);text-decoration:underline;text-underline-offset:3px;padding:6px 8px;border-radius:999px}
+.chosen .add:active{background:var(--lavender)}
 .f{display:grid;gap:6px;margin-top:14px}
 .f label,.flabel{font-weight:900;font-size:15px}
 .f input{min-height:52px;padding:12px 16px;border:2px solid var(--line);border-radius:var(--rs);background:var(--lilac);font-size:16px;transition:border-color .2s}
 .f input:focus{border-color:var(--violet)}
 .f input::placeholder{color:#6e7090}
 .f.err input{border-color:var(--error)}
-.tgl{display:inline-block;margin-top:8px;padding:6px 0;font-weight:900;font-size:14px;color:var(--violet);text-decoration:underline;text-underline-offset:3px}
+.tgl{display:inline-flex;align-items:center;min-height:44px;margin-top:4px;padding:6px 0;font-weight:900;font-size:14px;color:var(--violet);text-decoration:underline;text-underline-offset:3px}
 .tgl.done{text-decoration:none;color:var(--ok)}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-.chip{min-height:40px;padding:8px 16px;border:2px solid var(--line);border-radius:999px;background:#fff;font-size:15px;transition:background-color .2s,border-color .2s}
-.chip.on{background:var(--violet);border-color:var(--violet);color:#fff;font-weight:900}
+/* чипсы ниши: кромка снизу, при нажатии вдавливаются; выбранная — фиолетовая с тёмной кромкой */
+.chip{min-height:44px;padding:8px 16px;border:2px solid var(--line);border-radius:999px;background:#fff;font-size:15px;
+  box-shadow:0 3px 0 var(--line);transition:background-color .14s,border-color .14s,transform .14s ease-out,box-shadow .14s ease-out;touch-action:manipulation}
+@media (hover:hover){.chip:hover{border-color:var(--violet)}}
+.chip:active{transform:translateY(2px);box-shadow:0 1px 0 var(--line);background:var(--lavender);transition-duration:.06s}
+.chip.on{background:var(--violet);border-color:var(--violet);color:#fff;font-weight:900;box-shadow:0 3px 0 #3a22c4}
+.chip.on:active{box-shadow:0 1px 0 #3a22c4}
 
 /* ---------- 5 · заявка принята ---------- */
 .done-ic{display:grid;place-items:center;width:56px;height:56px;margin-top:10px;border-radius:50%;background:var(--peach);color:var(--violet)}
@@ -200,9 +247,10 @@ h3{font-weight:900;font-size:18px;line-height:1.2}
 .composer textarea{flex:1;min-height:46px;max-height:140px;padding:11px 16px;border:2px solid var(--line);border-radius:23px;background:var(--lilac);font-size:16px;line-height:1.3;resize:none;transition:border-color .2s}
 .composer textarea:focus{border-color:var(--violet)}
 .composer textarea::placeholder{color:#6e7090}
-.send{display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:var(--violet);color:#fff;flex:none;transition:opacity .2s,transform .12s}
-.send:active{transform:scale(.92)}
-.send:disabled{opacity:.45;cursor:default}
+.send{display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:var(--violet);color:#fff;flex:none;
+  box-shadow:0 3px 0 #3a22c4;transition:opacity .2s,transform .14s ease-out,box-shadow .14s ease-out;touch-action:manipulation}
+.send:active{transform:translateY(2px);box-shadow:0 1px 0 #3a22c4;transition-duration:.06s}
+.send:disabled{opacity:.45;cursor:default;transform:none;box-shadow:0 2px 0 #3a22c4}
 .chars{max-width:520px;margin:-4px auto 0;padding:0 16px 6px;font-size:12px;color:var(--muted);text-align:right}
 /* пока печатают — таб-бар прячем, поле ввода прижимаем к клавиатуре */
 body.kb-open .tabs{display:none}
@@ -213,9 +261,12 @@ body.kb-open .composer{bottom:0;padding-bottom:var(--safe-b)}
 
 /* ---------- админ-панель ---------- */
 .arow{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 4px}
-.abtn{min-height:42px;padding:9px 16px;border:2px solid var(--line);border-radius:999px;background:#fff;font-weight:900;font-size:14px;color:var(--ink)}
-.abtn.g{background:var(--violet);border-color:var(--violet);color:#fff}
-.abtn.sm{min-height:36px;padding:6px 12px;font-size:13px;flex:none}
+.abtn{min-height:44px;padding:9px 16px;border:2px solid var(--line);border-radius:999px;background:#fff;font-weight:900;font-size:14px;color:var(--ink);
+  box-shadow:0 3px 0 var(--line);transition:transform .14s ease-out,box-shadow .14s ease-out,background-color .14s}
+.abtn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--line);background:var(--lilac);transition-duration:.06s}
+.abtn.g{background:var(--violet);border-color:var(--violet);color:#fff;box-shadow:0 3px 0 #3a22c4}
+.abtn.g:active{box-shadow:0 1px 0 #3a22c4;background:var(--violet-deep)}
+.abtn.sm{min-height:44px;padding:6px 14px;font-size:13px;flex:none}
 .abtn.danger{border-color:var(--error);color:var(--error);margin-top:16px}
 .alist{background:#fff;border-radius:var(--r);padding:4px 14px;margin-top:12px;box-shadow:0 1px 0 var(--line)}
 .arow-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
@@ -233,7 +284,8 @@ body.kb-open .composer{bottom:0;padding-bottom:var(--safe-b)}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .icons{display:flex;gap:8px;flex-wrap:wrap}
 .ico{width:44px;height:44px;border-radius:12px;border:2px solid var(--line);background:#fff;display:grid;place-items:center;cursor:pointer}
-.ico.on{border-color:var(--violet);color:var(--violet)}.ico input{display:none}
+.ico.on{border-color:var(--violet);color:var(--violet)}.ico:active{background:var(--lavender)}
+.ico:focus-within{outline:3px solid var(--violet);outline-offset:2px}.ico input{display:none}
 .check{display:flex;gap:10px;align-items:center;margin-top:14px;font-size:15px}.check input{width:auto;accent-color:var(--violet)}
 .ticket{margin-top:12px;padding:12px 16px;background:#fff;border-radius:var(--rs);box-shadow:0 1px 0 var(--line)}
 .ticket .tr{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
@@ -249,4 +301,7 @@ body.kb-open .composer{bottom:0;padding-bottom:var(--safe-b)}
 }
 
 html.still *{animation-duration:0s!important;animation-delay:0s!important;transition:none!important}
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:.01ms!important}.dots i{opacity:1}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:.01ms!important}.dots i{opacity:1}
+  /* кнопки и карточки не двигаются: нажатие видно только по тени и цвету */
+  .btn.btn:hover,.btn.btn:active,.chip:active,.send:active,.abtn:active,.tab:active svg{transform:none}
+  .svc:hover,.svc:active,.pk:hover,.pk:active{translate:none}}
