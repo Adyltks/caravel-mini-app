@@ -62,7 +62,7 @@
   const services = () => C.services.filter((s) => s.kind !== "package");
   const packages = () => C.services.filter((s) => s.kind === "package");
   const unit = (term) => { const t = String(term || "").trim(); if (/^(в месяц|ежемесяч)/i.test(t)) return "в месяц"; return t.length <= 14 ? t : t.split(/[,(]/)[0].trim(); };
-  const logo = (white) => `<img src="images/logo-${white ? "white" : "color"}.png" alt="" width="52" height="28">`;
+  const logo = (white) => `<img src="images/mark-${white ? "white" : "color"}.svg" alt="" width="39" height="28">`;
   const haptic = (kind, arg) => { try { tg && tg.HapticFeedback && tg.HapticFeedback[kind](arg); } catch {} };
 
   async function post(path, body) {
