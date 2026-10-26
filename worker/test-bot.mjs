@@ -5,6 +5,7 @@ import { botReply, buildSystem, turnNote, TEXTS, closeTurn } from "./src/bot/bra
 import { costOf, pickModel, bishkekDay } from "./src/bot/pricing.js";
 import { createMemoryStore, trimHistory, visibleTranscript } from "./src/bot/store.js";
 import { chatTurn, leadCard, parseWebPayload, noteManagerReply, telegramSession, safe } from "./src/bot/channels.js";
+import { KNOWLEDGE, RULES } from "./src/bot/knowledge.js";
 
 const DAY_14 = new Date("2026-10-24T08:00:00Z"); // 14:00 в Бишкеке
 const NIGHT_2330 = new Date("2026-10-24T17:30:00Z"); // 23:30 в Бишкеке
@@ -295,4 +296,15 @@ test("ревью 4: две реплики подряд — одна заявка
   await Promise.all([turn("Айгерим"), turn("+996555000001")]);
   assert.equal(sent.filter((t) => t.startsWith("🤖")).length, 1, "одна карточка заявки");
   assert.equal(sent.filter((t) => t.startsWith("📝")).length, 1, "вторая реплика — дополнение");
+});
+
+test("демо: в базе нет ссылки на демо одежды, правила выбора демо на месте", () => {
+  // Демо одежды (catalog-template) с рисованными силуэтами в продажах не показываем
+  assert.ok(!KNOWLEDGE.includes("catalog-template"), "в KNOWLEDGE осталась ссылка catalog-template");
+  assert.ok(!RULES.includes("catalog-template"), "в RULES осталась ссылка catalog-template");
+  for (const url of ["https://catalog-demo-cosmetics.adyltks.workers.dev", "https://catalog-demo-gifts.adyltks.workers.dev",
+    "https://catalog-demo-salon.adyltks.workers.dev"]) {
+    assert.ok(RULES.includes(url), `в правилах нет демо ${url}`);
+  }
+  assert.match(RULES, /## Какое демо показать/);
 });
